@@ -22,3 +22,6 @@ def stable2():
 
     image.save("stable-diffusion-2-1.png")
     return image
+
+
+stable2()
