@@ -4,7 +4,7 @@ from diffusers import DiffusionPipeline
 from pathlib import Path
 import sys
 
-base_model = "CompVis/stable-diffusion-v1-4"
+base_model = sys.argv[2]
 
 pipe = DiffusionPipeline.from_pretrained(
     base_model,
