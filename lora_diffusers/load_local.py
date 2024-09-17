@@ -24,7 +24,7 @@ start_time = time.time()
 image = pipe(
     prompt,
     negative_prompt="",
-    num_inference_steps=28,
+    num_inference_steps=150,
     guidance_scale=7.0,
 ).images[0]
 

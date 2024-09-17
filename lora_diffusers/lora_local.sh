@@ -5,10 +5,11 @@ set -ex
 
 git clone https://github.com/shirayu/example_lora_training.git || echo "git done"
 
-LABEL="andy" 
+LABEL="KVWAG" 
 
 # BASE_MODEL="CompVis/stable-diffusion-v1-4"
 BASE_MODEL="JosephusCheung/ACertainty"
+BASE_MODEL="stable-diffusion-v1-5/stable-diffusion-v1-5"
 
 accelerate launch \
     --num_processes 1 \
@@ -25,7 +26,7 @@ accelerate launch \
     --sample_batch_size=1 \
     --gradient_accumulation_steps=1 \
     --gradient_checkpointing \
-    --learning_rate=5e-6 \
+    --learning_rate=1e-4 \
     --lr_scheduler="constant" \
     --lr_warmup_steps=0 \
     --checkpointing_steps=100 \
