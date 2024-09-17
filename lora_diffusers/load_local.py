@@ -27,7 +27,7 @@ start_time = time.time()
 image = pipe(
     prompt,
     negative_prompt="",
-    num_inference_steps=150,
+    # num_inference_steps=150,
 ).images[0]
 
 print("--- lora local: %s seconds ---" %

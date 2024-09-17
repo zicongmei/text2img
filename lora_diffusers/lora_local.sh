@@ -32,7 +32,6 @@ accelerate launch \
     --lr_scheduler="constant" \
     --lr_warmup_steps=0 \
     --checkpointing_steps=100 \
-    --mixed_precision=fp16 \
     --max_train_steps=1000
 
 
