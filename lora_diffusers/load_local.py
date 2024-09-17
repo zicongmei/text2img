@@ -3,13 +3,13 @@ import time
 from diffusers import DiffusionPipeline
 from pathlib import Path
 
-base_model = "stabilityai/stable-diffusion-2-1"
+base_model = "CompVis/stable-diffusion-v1-4"
 
 pipe = DiffusionPipeline.from_pretrained(
-        base_model,
-        torch_dtype=torch.float16,
-        safety_checker=None,
-    ).to("cuda")
+    base_model,
+    torch_dtype=torch.float16,
+    safety_checker=None,
+).to("cuda")
 
 pipe.unet.load_attn_procs("./models/pytorch_lora_weights.safetensors")
 
@@ -27,4 +27,3 @@ image = pipe(
 print("--- lora local: %s seconds ---" %
       (time.time() - start_time))
 image.save("lora_local.png")
-

@@ -13,7 +13,7 @@ accelerate launch \
     --mixed_precision "fp16" \
     --dynamo_backend "no" \
     train_dreambooth_lora.py \
-    --pretrained_model_name_or_path="stabilityai/stable-diffusion-2-1" \
+    --pretrained_model_name_or_path="CompVis/stable-diffusion-v1-4" \
     --instance_data_dir="example_lora_training/diffusers_lora_example/img_train_512x512" \
     --output_dir="models" \
     --instance_prompt="${LABEL}" \
