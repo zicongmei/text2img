@@ -14,8 +14,8 @@ pipe = DiffusionPipeline.from_pretrained(
 
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
-pipe.unet.load_attn_procs("./models/pytorch_lora_weights.safetensors")
-# pipe.load_lora_weights("./models/pytorch_lora_weights.safetensors")
+# pipe.unet.load_attn_procs("./models/pytorch_lora_weights.safetensors")
+pipe.load_lora_weights("./models/pytorch_lora_weights.safetensors")
 
 # prompt = input("lora-local > ")
 prompt = sys.argv[1]
