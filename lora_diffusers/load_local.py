@@ -2,6 +2,7 @@ import torch
 import time
 from diffusers import DiffusionPipeline
 from pathlib import Path
+import sys
 
 base_model = "CompVis/stable-diffusion-v1-4"
 
@@ -13,7 +14,10 @@ pipe = DiffusionPipeline.from_pretrained(
 
 pipe.unet.load_attn_procs("./models/pytorch_lora_weights.safetensors")
 
-prompt = input("lora-local > ")
+# prompt = input("lora-local > ")
+prompt = sys.argv[1]
+
+print("prompt: ", prompt)
 
 
 start_time = time.time()
