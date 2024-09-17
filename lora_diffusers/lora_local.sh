@@ -11,6 +11,8 @@ LABEL="KVWAG"
 BASE_MODEL="JosephusCheung/ACertainty"
 BASE_MODEL="stable-diffusion-v1-5/stable-diffusion-v1-5"
 
+rm -rf models || echo "dir not exist"
+
 accelerate launch \
     --num_processes 1 \
     --num_machines 1 \
