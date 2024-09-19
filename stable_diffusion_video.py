@@ -1,7 +1,7 @@
 from diffusers import StableVideoDiffusionPipeline
 import torch
 import imageio
-import stable_diffusion_2_1
+from PIL import Image
 
 # Load the model
 pipe = StableVideoDiffusionPipeline.from_pretrained(
@@ -11,10 +11,8 @@ pipe = StableVideoDiffusionPipeline.from_pretrained(
 )
 pipe = pipe.to("cuda")
 
-stable21 = stable_diffusion_2_1.Stable21()
 
-prompt = input("> ")
-init_image = stable21.generate(prompt)
+init_image = Image.open("stable-diffusion-2-1.png")
 
 # Generate the video
 video_frames = pipe(init_image, num_frames=24, num_inference_steps=25).frames
