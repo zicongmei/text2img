@@ -1,19 +1,25 @@
 import torch
 import time
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, StableDiffusion3Pipeline
 
 
 class Text2Img:
-    def __init__(self, model_id, token=None):
+    def __init__(self, model_id, access_token=None):
         self.model_id = model_id
         self.model_name = model_id.split('/')[1]
         # Use the DPMSolverMultistepScheduler (DPM-Solver++) scheduler here instead
-        self.pipe = StableDiffusionPipeline.from_pretrained(
-            self.model_id,
-            torch_dtype=torch.float16,
-            token=token)
-        self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-            self.pipe.scheduler.config)
+        try:
+            self.pipe = StableDiffusionPipeline.from_pretrained(
+                self.model_id,
+                torch_dtype=torch.float16,
+                token=access_token)
+            self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                self.pipe.scheduler.config)
+        except:
+            self.pipe = StableDiffusion3Pipeline.from_pretrained(
+                self.model_id,
+                torch_dtype=torch.float16,
+                token=access_token)
         self.pipe = self.pipe.to("cuda")
 
     def generate(self, prompt):
