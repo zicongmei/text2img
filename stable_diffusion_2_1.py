@@ -16,18 +16,24 @@ class Stable21:
         self.pipe = self.pipe.to("cuda")
 
     def generate(self, prompt):
+        return self.generate_cfg(prompt=prompt, cfg_scale=7.0)
+
+    def generate_cfg(self, prompt, cfg_scale):
         start_time = time.time()
-        image = self.pipe(prompt).images[0]
+        image = self.pipe(prompt,
+                          guidance_scale=cfg_scale,
+                          ).images[0]
         print("--- "+model_name+": %s seconds ---" %
-            (time.time() - start_time))
+              (time.time() - start_time))
 
         image.save(model_name+".png")
         return image
 
 
 def stable2():
-    s=Stable21()
+    s = Stable21()
     prompt = input(model_name+"> ")
     return s.generate(prompt)
+
 
 stable2()

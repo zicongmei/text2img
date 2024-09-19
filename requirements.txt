@@ -1,3 +1,4 @@
+accelerate @ git+https://github.com/huggingface/accelerate@4305033f8035defad0a87cd38e5c918e78510ba5
 certifi==2024.8.30
 charset-normalizer==3.3.2
 diffusers==0.30.2
@@ -26,6 +27,7 @@ nvidia-nvjitlink-cu12==12.6.68
 nvidia-nvtx-cu12==12.1.105
 packaging==24.1
 pillow==10.4.0
+psutil==6.0.0
 PyYAML==6.0.2
 regex==2024.7.24
 requests==2.32.3
