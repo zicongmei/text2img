@@ -36,4 +36,5 @@ def stable2():
     return s.generate(prompt)
 
 
-stable2()
+if __name__ == "__main__":
+    stable2()
