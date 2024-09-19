@@ -36,5 +36,13 @@ def stable2():
     return s.generate(prompt)
 
 
+def run():
+    s = Stable21()
+
+    while True:
+        prompt = input(model_name+"> ")
+        s.generate(prompt)
+
+
 if __name__ == "__main__":
-    stable2()
+    run()

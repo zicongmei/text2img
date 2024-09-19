@@ -33,6 +33,7 @@ class Stable15:
 def stable15():
     s = Stable15()
     prompt = input(model_name+"> ")
+
     return s.generate(prompt)
 
 
