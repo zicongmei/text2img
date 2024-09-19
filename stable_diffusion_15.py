@@ -1,6 +1,6 @@
 import text2img
 
-model_id = "stable-diffusion-v1-5"
+model_id = "runwayml/stable-diffusion-v1-5"
 
 
 def run():
