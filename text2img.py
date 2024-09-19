@@ -4,12 +4,14 @@ from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 
 
 class Text2Img:
-    def __init__(self, model_id):
+    def __init__(self, model_id, token=None):
         self.model_id = model_id
         self.model_name = model_id.split('/')[1]
         # Use the DPMSolverMultistepScheduler (DPM-Solver++) scheduler here instead
         self.pipe = StableDiffusionPipeline.from_pretrained(
-            self.model_id, torch_dtype=torch.float16)
+            self.model_id,
+            torch_dtype=torch.float16,
+            token=token)
         self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             self.pipe.scheduler.config)
         self.pipe = self.pipe.to("cuda")
@@ -29,14 +31,14 @@ class Text2Img:
         return image
 
 
-def run_once(model_id):
-    s = Text2Img(model_id)
+def run_once(model_id, token=None):
+    s = Text2Img(model_id, token)
     prompt = input(s.model_name+"> ")
     return s.generate(prompt)
 
 
-def run(model_id):
-    s = Text2Img(model_id)
+def run(model_id, token=None):
+    s = Text2Img(model_id, token)
 
     while True:
         prompt = input(s.model_name+"> ")

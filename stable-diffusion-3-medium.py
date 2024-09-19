@@ -1,27 +1,14 @@
-import torch
-import time
-from diffusers import StableDiffusion3Pipeline
 from pathlib import Path
+import text2img
 
-access_token = Path("token").read_text().strip()
+model_id = "stabilityai/stable-diffusion-3-medium-diffusers"
 
-pipe = StableDiffusion3Pipeline.from_pretrained(
-    "stabilityai/stable-diffusion-3-medium-diffusers",
-    torch_dtype=torch.float16,
-    token=access_token)
-pipe = pipe.to("cuda")
-
-prompt = input("stable-diffusion-3-medium> ")
+access_token = Path("/cert/hg_token").read_text().strip()
 
 
-start_time = time.time()
-image = pipe(
-    prompt,
-    negative_prompt="",
-    num_inference_steps=28,
-    guidance_scale=7.0,
-).images[0]
+def run():
+    text2img.run(model_id=model_id, token=access_token)
 
-print("--- stable-diffusion-3-medium: %s seconds ---" %
-      (time.time() - start_time))
-image.save("stable-diffusion-3-medium.png")
+
+if __name__ == "__main__":
+    run()
