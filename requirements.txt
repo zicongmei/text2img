@@ -27,11 +27,13 @@ nvidia-nvjitlink-cu12==12.6.68
 nvidia-nvtx-cu12==12.1.105
 packaging==24.1
 pillow==10.4.0
+protobuf==5.28.2
 psutil==6.0.0
 PyYAML==6.0.2
 regex==2024.7.24
 requests==2.32.3
 safetensors==0.4.5
+sentencepiece==0.2.0
 sympy==1.13.2
 tokenizers==0.19.1
 torch==2.4.1

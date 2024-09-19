@@ -6,7 +6,7 @@ from pathlib import Path
 access_token = Path("token").read_text().strip()
 
 pipe = StableDiffusion3Pipeline.from_pretrained(
-    "stabilityai/stable-diffusion-3-medium",
+    "stabilityai/stable-diffusion-3-medium-diffusers",
     torch_dtype=torch.float16,
     token=access_token)
 pipe = pipe.to("cuda")
