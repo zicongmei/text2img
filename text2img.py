@@ -28,8 +28,8 @@ class Text2Img:
         accelerator = Accelerator()
 
         # Prepare the model and pipeline for multi-GPU execution
-        self.pipe = self.ppipe.to(accelerator.device)
-        self.ppipe = accelerator.prepare(self.ppipe)
+        self.pipe = self.pipe.to(accelerator.device)
+        self.pipe = accelerator.prepare(self.pipe)
 
         self.pipe = self.pipe.to("cuda")
 
