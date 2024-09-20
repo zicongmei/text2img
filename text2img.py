@@ -52,6 +52,7 @@ class Text2Img:
         start_time = time.time()
         image = self.pipe(prompt,
                           guidance_scale=cfg_scale,
+                          num_inference_steps=100,
                           ).images[0]
         print("--- "+self.model_name+": %s seconds ---" %
               (time.time() - start_time))
