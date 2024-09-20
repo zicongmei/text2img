@@ -8,30 +8,30 @@ class Text2Img:
     def __init__(self, model_id, access_token=None):
         self.model_id = model_id
         self.model_name = model_id.split('/')[1]
+        
+        num_gpus = torch.cuda.device_count()
+        print(f"Number of GPUs available: {num_gpus}")
+
+        # Initialize the accelerator
+        accelerator = Accelerator()
         try:
             self.pipe = StableDiffusionPipeline.from_pretrained(
                 self.model_id,
                 torch_dtype=torch.float16,
                 token=access_token)
-            self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-                self.pipe.scheduler.config)
         except:
             self.pipe = StableDiffusion3Pipeline.from_pretrained(
                 self.model_id,
                 torch_dtype=torch.float16,
-                token=access_token)
+                token=access_token,
+                device_map="balanced",
+                )
 
-        num_gpus = torch.cuda.device_count()
-        print(f"Number of GPUs available: {num_gpus}")
-
-        # Create an Accelerator object
-        accelerator = Accelerator()
-
-        # Prepare the model and pipeline for multi-GPU execution
-        self.pipe = self.pipe.to(accelerator.device)
+        self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+            self.pipe.scheduler.config)
+        
         self.pipe = accelerator.prepare(self.pipe)
 
-        self.pipe = self.pipe.to("cuda")
 
     def generate(self, prompt):
         return self.generate_cfg(prompt=prompt, cfg_scale=7.0)
