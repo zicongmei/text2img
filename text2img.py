@@ -1,5 +1,6 @@
 import torch
 import time
+from accelerate import Accelerator
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, StableDiffusion3Pipeline
 
 
@@ -7,7 +8,6 @@ class Text2Img:
     def __init__(self, model_id, access_token=None):
         self.model_id = model_id
         self.model_name = model_id.split('/')[1]
-        # Use the DPMSolverMultistepScheduler (DPM-Solver++) scheduler here instead
         try:
             self.pipe = StableDiffusionPipeline.from_pretrained(
                 self.model_id,
@@ -20,6 +20,17 @@ class Text2Img:
                 self.model_id,
                 torch_dtype=torch.float16,
                 token=access_token)
+
+        num_gpus = torch.cuda.device_count()
+        print(f"Number of GPUs available: {num_gpus}")
+
+        # Create an Accelerator object
+        accelerator = Accelerator()
+
+        # Prepare the model and pipeline for multi-GPU execution
+        pipe = pipe.to(accelerator.device)
+        pipe = accelerator.prepare(pipe)
+
         self.pipe = self.pipe.to("cuda")
 
     def generate(self, prompt):
