@@ -25,7 +25,7 @@ class Text2Img:
             self.pipe.scheduler.config)
         self.pipe = self.pipe.to("cuda")
 
-    def stable_diffussion3(self, model_id):
+    def stable_diffussion3(self):
         num_gpus = torch.cuda.device_count()
         print(f"Number of GPUs available: {num_gpus}")
 
