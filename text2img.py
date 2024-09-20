@@ -24,6 +24,7 @@ class Text2Img:
         self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             self.pipe.scheduler.config)
         self.pipe = self.pipe.to("cuda")
+        self.num_inference_steps = 50
 
     def stable_diffussion3(self):
         num_gpus = torch.cuda.device_count()
@@ -43,6 +44,7 @@ class Text2Img:
             self.pipe.scheduler.config)
         
         self.pipe = accelerator.prepare(self.pipe)
+        self.num_inference_steps = 150
 
 
     def generate(self, prompt):
@@ -52,7 +54,7 @@ class Text2Img:
         start_time = time.time()
         image = self.pipe(prompt,
                           guidance_scale=cfg_scale,
-                          num_inference_steps=100,
+                          num_inference_steps=self.num_inference_steps,
                           ).images[0]
         print("--- "+self.model_name+": %s seconds ---" %
               (time.time() - start_time))
