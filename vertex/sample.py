@@ -11,8 +11,10 @@ prompt = "a person riding bike" # The text prompt describing what you want to se
 
 vertexai.init(project=PROJECT_ID, location="us-central1")
 
-# model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
-model = ImageGenerationModel.from_pretrained("publishers/google/models/imagen-3.0-generate-001")
+# model_name = "publishers/anthropic/models/claude-3-5-sonnet"
+# model_name = "imagen-3.0-generate-001"
+model_name = "publishers/google/models/imagen-3.0-generate-001"
+model = ImageGenerationModel.from_pretrained(model_name)
 
 images = model.generate_images(
     prompt=prompt,
