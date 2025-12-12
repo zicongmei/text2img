@@ -145,6 +145,10 @@ async function generateImage() {
                 },
             };
 
+            console.log("Step 1: Enhancing prompt via Gemini API");
+            console.log("API Endpoint:", promptEnhancementEndpoint);
+            console.log("Request Body:", JSON.stringify(promptEnhancementRequestBody, null, 2));
+
             const promptEnhancementResponse = await fetch(promptEnhancementEndpoint, {
                 method: 'POST',
                 headers: {
@@ -154,8 +158,12 @@ async function generateImage() {
                 body: JSON.stringify(promptEnhancementRequestBody),
             });
 
+            console.log("API Response Status:", promptEnhancementResponse.status);
+
             if (promptEnhancementResponse.ok) {
                 const promptEnhancementData = await promptEnhancementResponse.json();
+                console.log("API Response Data:", JSON.stringify(promptEnhancementData, null, 2));
+
                 if (promptEnhancementData.candidates && promptEnhancementData.candidates.length > 0 &&
                     promptEnhancementData.candidates[0].content && promptEnhancementData.candidates[0].content.parts &&
                     promptEnhancementData.candidates[0].content.parts.length > 0) {
@@ -164,7 +172,8 @@ async function generateImage() {
                     statusMessage.textContent = 'Prompt enhanced by Gemini. Simulating image generation...';
                 }
             } else {
-                console.warn('Could not enhance prompt:', await promptEnhancementResponse.json());
+                const errorText = await promptEnhancementResponse.text();
+                console.warn('Could not enhance prompt. Response:', errorText);
                 statusMessage.textContent = 'Failed to enhance prompt, using original. Simulating image generation...';
             }
         } catch (promptError) {
@@ -179,6 +188,9 @@ async function generateImage() {
         // For this example, we'll use placeholder images from source.unsplash.com.
         // We generate a predictable URL based on the prompt for demonstration.
         
+        console.log("Step 2: Simulating image generation");
+        console.log("Final Prompt used for URL generation:", finalPrompt);
+
         // Generate a simple hash from the prompt to get a somewhat consistent placeholder image
         const promptHash = Array.from(finalPrompt).reduce((s, c) => Math.imul(31, s) + c.charCodeAt(0) | 0, 0);
         const seed = Math.abs(promptHash % 1000); // Use a seed for consistent placeholder images
@@ -189,6 +201,8 @@ async function generateImage() {
             `https://source.unsplash.com/random/512x512?${finalPrompt}&sig=${seed + 2}`
         ];
 
+        console.log("Generated Image URLs:", imageUrls);
+
         imageUrls.forEach(url => {
             const imgContainer = document.createElement('div');
             imgContainer.classList.add('image-item');
@@ -196,10 +210,12 @@ async function generateImage() {
             img.src = url;
             img.alt = finalPrompt;
             img.onload = () => {
+                console.log("Image loaded successfully:", url);
                 imgContainer.appendChild(img);
                 imageGallery.appendChild(imgContainer);
             };
-            img.onerror = () => {
+            img.onerror = (e) => {
+                console.error("Failed to load image from URL:", url, e);
                 const errorDiv = document.createElement('div');
                 errorDiv.textContent = `Failed to load image for: "${finalPrompt}"`;
                 errorDiv.classList.add('image-error');
