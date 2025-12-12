@@ -1,17 +1,16 @@
 // text2img.js
 
 let currentApiKey = '';
-let selectedModel = 'gemini-2.5-flash-lite'; // Default model, primarily for prompt refinement if used, or just a selector.
+let selectedModel = 'gemini-2.5-flash-lite'; // Default model for prompt refinement
 
-// Model names and labels, duplicated from chatbot.js for independence.
-// IMPORTANT NOTE: The listed Gemini models (e.g., gemini-2.5-flash, gemini-3-pro-preview)
-// are primarily for text generation, understanding, and multimodal tasks (text/image input, text output).
-// They do NOT directly generate images from text prompts in the same way DALL-E or Imagen do.
-// For actual image generation with Google models, services like Imagen 2 via Google Cloud's Vertex AI
-// would typically be used.
-// This implementation provides a UI to input a prompt and API key, and will simulate
-// an image generation process using a placeholder API call, assuming a conceptual
-// "Gemini Image API" might exist or a proxy for it.
+// Store last API interactions for debugging
+let lastApiInteraction = {
+    url: '',
+    request: null,
+    response: null
+};
+
+// Model names and labels for prompt enhancement
 const GEMINI_TEXT_MODELS = {
     'gemini-2.5-flash': 'Gemini 2.5 Flash (Text Model)',
     'gemini-2.5-pro': 'Gemini 2.5 Pro (Text Model)',
@@ -27,7 +26,15 @@ const promptInput = document.getElementById('promptInput');
 const generateImageButton = document.getElementById('generateImageButton');
 const imageGallery = document.getElementById('imageGallery');
 const statusMessage = document.getElementById('statusMessage');
-const explanationNote = document.getElementById('explanationNote'); // To display the disclaimer
+const explanationNote = document.getElementById('explanationNote');
+
+// Debug Elements
+const showDebugButton = document.getElementById('showDebugButton');
+const debugInfo = document.getElementById('debugInfo');
+const debugUrl = document.getElementById('debugUrl');
+const debugRequest = document.getElementById('debugRequest');
+const debugResponse = document.getElementById('debugResponse');
+const closeDebugButton = document.getElementById('closeDebugButton');
 
 // Utility functions for localStorage
 function setLocalStorageItem(name, value) {
@@ -35,8 +42,6 @@ function setLocalStorageItem(name, value) {
         localStorage.setItem(name, value);
     } catch (e) {
         console.error(`Error saving to localStorage for ${name}:`, e);
-        statusMessage.textContent = `Error saving data locally: ${e.message}`;
-        setTimeout(() => statusMessage.textContent = '', 3000);
     }
 }
 
@@ -45,8 +50,6 @@ function getLocalStorageItem(name) {
         return localStorage.getItem(name);
     } catch (e) {
         console.error(`Error loading from localStorage for ${name}:`, e);
-        statusMessage.textContent = `Error loading data locally: ${e.message}`;
-        setTimeout(() => statusMessage.textContent = '', 3000);
         return null;
     }
 }
@@ -60,10 +63,9 @@ function setApiKey() {
         return false;
     }
     currentApiKey = apiKey;
-    setLocalStorageItem('geminiApiKey', apiKey); // Save API key to localStorage
+    setLocalStorageItem('geminiApiKey', apiKey); 
     statusMessage.textContent = 'API Key set successfully and saved!';
     setTimeout(() => statusMessage.textContent = '', 3000);
-    console.log('API Key set.');
     return true;
 }
 
@@ -75,13 +77,12 @@ function loadApiKeyFromLocalStorage() {
         currentApiKey = apiKey;
         statusMessage.textContent = 'API Key loaded from local storage!';
         setTimeout(() => statusMessage.textContent = '', 3000);
-        console.log('API Key loaded from local storage.');
     }
 }
 
 // Function to populate model dropdown and load selected model
 function populateModelSelect() {
-    geminiModelSelect.innerHTML = ''; // Clear existing options
+    geminiModelSelect.innerHTML = ''; 
     for (const modelId in GEMINI_TEXT_MODELS) {
         const option = document.createElement('option');
         option.value = modelId;
@@ -93,145 +94,165 @@ function populateModelSelect() {
     if (storedModel && GEMINI_TEXT_MODELS[storedModel]) {
         selectedModel = storedModel;
         geminiModelSelect.value = storedModel;
-        console.log(`Selected model loaded from local storage: ${selectedModel}`);
     } else {
-        geminiModelSelect.value = selectedModel; // Set default if no stored value or invalid
+        geminiModelSelect.value = selectedModel; 
     }
 }
 
 // Function to update the selected model
 function updateSelectedModel() {
     selectedModel = geminiModelSelect.value;
-    setLocalStorageItem('selectedModel', selectedModel); // Save selected model to localStorage
+    setLocalStorageItem('selectedModel', selectedModel);
     statusMessage.textContent = `Model set to: ${selectedModel}`;
     setTimeout(() => statusMessage.textContent = '', 3000);
-    console.log(`Selected model: ${selectedModel}`);
 }
 
-// Function to simulate image generation
+// Debug functions
+function updateDebugInfo(url, request, response) {
+    lastApiInteraction.url = url;
+    lastApiInteraction.request = request;
+    lastApiInteraction.response = response;
+    showDebugButton.style.display = 'inline-block';
+}
+
+function showDebugModal() {
+    debugUrl.textContent = lastApiInteraction.url;
+    debugRequest.textContent = JSON.stringify(lastApiInteraction.request, null, 2);
+    debugResponse.textContent = JSON.stringify(lastApiInteraction.response, null, 2);
+    debugInfo.style.display = 'block';
+}
+
+function hideDebugModal() {
+    debugInfo.style.display = 'none';
+}
+
+// Function to generate image
 async function generateImage() {
     const prompt = promptInput.value.trim();
     if (!prompt) {
         statusMessage.textContent = 'Please enter a prompt.';
-        setTimeout(() => statusMessage.textContent = '', 3000);
         return;
     }
     if (!currentApiKey) {
         statusMessage.textContent = 'Please set your Gemini API Key first.';
-        setTimeout(() => statusMessage.textContent = '', 3000);
         return;
     }
 
-    imageGallery.innerHTML = ''; // Clear previous images
-    statusMessage.textContent = 'Generating images...';
+    imageGallery.innerHTML = ''; 
+    statusMessage.textContent = 'Starting process...';
     generateImageButton.disabled = true;
+    hideDebugModal(); // Hide previous debug info
 
     try {
-        // --- STEP 1: (Optional) Use Gemini Text Model for Prompt Enhancement ---
-        // This step demonstrates using a Gemini text model to refine the user's prompt.
-        // For actual image generation, the *enhanced* prompt would then be sent to an
-        // image generation service (e.g., Imagen 2, DALL-E, Stable Diffusion).
-        
         let finalPrompt = prompt;
+
+        // --- STEP 1: Prompt Enhancement (Optional, using selected text model) ---
         try {
+            statusMessage.textContent = 'Enhancing prompt with Gemini Text Model...';
             const promptEnhancementEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
             const promptEnhancementRequestBody = {
                 contents: [{
                     role: 'user',
                     parts: [{ text: `Elaborate on the following image generation prompt to make it more descriptive and suitable for a text-to-image model. Focus on details like style, lighting, setting, and specific elements. Provide only the enhanced prompt, no conversational text. Original prompt: "${prompt}"` }]
                 }],
-                generationConfig: {
-                    maxOutputTokens: 200,
-                },
+                generationConfig: { maxOutputTokens: 200 },
             };
 
-            console.log("Step 1: Enhancing prompt via Gemini API");
-            console.log("API Endpoint:", promptEnhancementEndpoint);
-            console.log("Request Body:", JSON.stringify(promptEnhancementRequestBody, null, 2));
-
-            const promptEnhancementResponse = await fetch(promptEnhancementEndpoint, {
+            const promptResponse = await fetch(promptEnhancementEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Goog-Api-Key': currentApiKey,
-                },
+                headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': currentApiKey },
                 body: JSON.stringify(promptEnhancementRequestBody),
             });
 
-            console.log("API Response Status:", promptEnhancementResponse.status);
+            const promptData = await promptResponse.json();
+            
+            // Log debug info for this step (will be overwritten if next step runs, which is fine)
+            updateDebugInfo(promptEnhancementEndpoint, promptEnhancementRequestBody, promptData);
 
-            if (promptEnhancementResponse.ok) {
-                const promptEnhancementData = await promptEnhancementResponse.json();
-                console.log("API Response Data:", JSON.stringify(promptEnhancementData, null, 2));
-
-                if (promptEnhancementData.candidates && promptEnhancementData.candidates.length > 0 &&
-                    promptEnhancementData.candidates[0].content && promptEnhancementData.candidates[0].content.parts &&
-                    promptEnhancementData.candidates[0].content.parts.length > 0) {
-                    finalPrompt = promptEnhancementData.candidates[0].content.parts[0].text;
-                    console.log('Enhanced Prompt:', finalPrompt);
-                    statusMessage.textContent = 'Prompt enhanced by Gemini. Simulating image generation...';
-                }
-            } else {
-                const errorText = await promptEnhancementResponse.text();
-                console.warn('Could not enhance prompt. Response:', errorText);
-                statusMessage.textContent = 'Failed to enhance prompt, using original. Simulating image generation...';
+            if (promptResponse.ok && promptData.candidates?.[0]?.content?.parts?.[0]?.text) {
+                finalPrompt = promptData.candidates[0].content.parts[0].text;
+                console.log('Enhanced Prompt:', finalPrompt);
             }
         } catch (promptError) {
-            console.error('Error during prompt enhancement:', promptError);
-            statusMessage.textContent = 'Error enhancing prompt, using original. Simulating image generation...';
+            console.warn('Error during prompt enhancement, proceeding with original:', promptError);
         }
 
-
-        // --- STEP 2: Simulate Image Generation based on finalPrompt ---
-        // This is a SIMULATION. In a real application, you would integrate with an actual
-        // image generation API (e.g., DALL-E 3, Stable Diffusion, or Google's Imagen 2 via Vertex AI).
-        // For this example, we'll use placeholder images from source.unsplash.com.
-        // We generate a predictable URL based on the prompt for demonstration.
+        // --- STEP 2: Image Generation (Using gemini-2.5-flash-image) ---
+        statusMessage.textContent = 'Generating image...';
         
-        console.log("Step 2: Simulating image generation");
-        console.log("Final Prompt used for URL generation:", finalPrompt);
+        // This specific model endpoint is used for image generation
+        const imageModel = "gemini-2.5-flash-image";
+        const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${imageModel}:generateContent`;
+        
+        const imageRequestBody = {
+            contents: [{
+                parts: [
+                    { text: finalPrompt }
+                ]
+            }]
+        };
 
-        // Generate a simple hash from the prompt to get a somewhat consistent placeholder image
-        const promptHash = Array.from(finalPrompt).reduce((s, c) => Math.imul(31, s) + c.charCodeAt(0) | 0, 0);
-        const seed = Math.abs(promptHash % 1000); // Use a seed for consistent placeholder images
+        const imageResponse = await fetch(imageEndpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': currentApiKey
+            },
+            body: JSON.stringify(imageRequestBody)
+        });
 
-        const imageUrls = [
-            `https://source.unsplash.com/random/512x512?${finalPrompt}&sig=${seed}`,
-            `https://source.unsplash.com/random/512x512?${finalPrompt}&sig=${seed + 1}`,
-            `https://source.unsplash.com/random/512x512?${finalPrompt}&sig=${seed + 2}`
-        ];
+        const imageData = await imageResponse.json();
+        
+        // Update debug info with the generation request/response
+        updateDebugInfo(imageEndpoint, imageRequestBody, imageData);
 
-        console.log("Generated Image URLs:", imageUrls);
+        if (!imageResponse.ok) {
+            throw new Error(imageData.error?.message || `API Error: ${imageResponse.statusText}`);
+        }
 
-        imageUrls.forEach(url => {
+        // Extract image data
+        // The curl example suggests searching for "data": "base64..."
+        // In the JSON structure, this is typically found in inlineData
+        let base64Image = null;
+
+        if (imageData.candidates && imageData.candidates[0] && imageData.candidates[0].content && imageData.candidates[0].content.parts) {
+            for (const part of imageData.candidates[0].content.parts) {
+                // Check for standard inlineData (camelCase or snake_case)
+                if (part.inlineData && part.inlineData.data) {
+                    base64Image = part.inlineData.data;
+                    break;
+                }
+                if (part.inline_data && part.inline_data.data) {
+                    base64Image = part.inline_data.data;
+                    break;
+                }
+            }
+        }
+
+        if (base64Image) {
             const imgContainer = document.createElement('div');
             imgContainer.classList.add('image-item');
             const img = document.createElement('img');
-            img.src = url;
+            img.src = `data:image/png;base64,${base64Image}`;
             img.alt = finalPrompt;
-            img.onload = () => {
-                console.log("Image loaded successfully:", url);
-                imgContainer.appendChild(img);
-                imageGallery.appendChild(imgContainer);
-            };
-            img.onerror = (e) => {
-                console.error("Failed to load image from URL:", url, e);
-                const errorDiv = document.createElement('div');
-                errorDiv.textContent = `Failed to load image for: "${finalPrompt}"`;
-                errorDiv.classList.add('image-error');
-                imgContainer.appendChild(errorDiv);
-                imageGallery.appendChild(imgContainer);
-            };
-        });
+            imgContainer.appendChild(img);
+            imageGallery.appendChild(imgContainer);
+            statusMessage.textContent = 'Image generated successfully!';
+        } else {
+            console.error("No image data found in response", imageData);
+            throw new Error('No valid image data found in the API response.');
+        }
 
-        statusMessage.textContent = 'Images generated (simulated)!';
-        // promptInput.value = ''; // Clear prompt - COMMENTED OUT as per user request
     } catch (error) {
         console.error('Error generating images:', error);
-        statusMessage.textContent = `Error generating images: ${error.message}`;
+        statusMessage.textContent = `Error: ${error.message}`;
+        const errorDiv = document.createElement('div');
+        errorDiv.classList.add('image-error');
+        errorDiv.textContent = `Generation Failed: ${error.message}`;
+        imageGallery.appendChild(errorDiv);
     } finally {
         generateImageButton.disabled = false;
-        setTimeout(() => statusMessage.textContent = '', 5000);
+        // Don't clear status immediately so user sees result
     }
 }
 
@@ -241,21 +262,23 @@ geminiModelSelect.addEventListener('change', updateSelectedModel);
 generateImageButton.addEventListener('click', generateImage);
 promptInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault(); // Prevent new line
+        event.preventDefault(); 
         generateImage();
     }
 });
+showDebugButton.addEventListener('click', showDebugModal);
+closeDebugButton.addEventListener('click', hideDebugModal);
 
 // Initial setup on page load
 document.addEventListener('DOMContentLoaded', () => {
     populateModelSelect();
     loadApiKeyFromLocalStorage();
-    // Display the explanation note/disclaimer
+    
     explanationNote.innerHTML = `
-        <strong>Note on Gemini for Image Generation:</strong>
-        The models listed in the dropdown (e.g., Gemini 2.5 Flash, Gemini 3 Pro Preview) are Google's powerful text-based or multimodal (text/image input, text output) generative AI models.
-        They are excellent for tasks like prompt engineering (as demonstrated by the optional prompt enhancement step in this tool) but do not directly generate images from text.
-        For actual text-to-image generation, Google offers services like <a href="https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/imagen-2" target="_blank">Imagen 2 via Vertex AI</a>.
-        This tool uses a Gemini text model to enhance your prompt and then simulates image generation using random images from Unsplash based on the refined prompt.
+        <strong>Instructions:</strong>
+        Enter your Gemini API Key. Type a prompt and click "Generate". 
+        The tool uses a text model to enhance your prompt, then sends it to the 
+        <code>gemini-2.5-flash-image</code> model for generation.
+        <br><small>If you encounter issues, use the "Show Last API Request/Response" button to inspect the raw API data.</small>
     `;
 });

@@ -3,8 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Text to Image Generator (Simulated)</title>
+    <title>Gemini Text to Image Generator</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .debug-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+            display: none;
+        }
+        .debug-section {
+            margin-bottom: 15px;
+        }
+        .debug-section h4 {
+            margin-top: 0;
+            margin-bottom: 5px;
+            color: #495057;
+        }
+        .debug-content {
+            background: #fff;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.9em;
+        }
+        #showDebugButton {
+            margin-top: 10px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        #showDebugButton:hover {
+            background-color: #5a6268;
+        }
+        #closeDebugButton {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -27,10 +78,27 @@
                 <label for="promptInput">Prompt:</label>
                 <textarea id="promptInput" rows="3" placeholder="Describe the image you want to generate... (e.g., A fluffy cat sitting on a vintage sofa)"></textarea>
                 <button id="generateImageButton">Generate Images</button>
+                <button id="showDebugButton" style="display:none;">Show Last API Request/Response</button>
             </div>
         </div>
 
         <div id="statusMessage" class="status-message"></div>
+
+        <div id="debugInfo" class="debug-container">
+            <div class="debug-section">
+                <h4>API Endpoint</h4>
+                <div id="debugUrl" class="debug-content"></div>
+            </div>
+            <div class="debug-section">
+                <h4>Request Body</h4>
+                <div id="debugRequest" class="debug-content"></div>
+            </div>
+            <div class="debug-section">
+                <h4>Response Body</h4>
+                <div id="debugResponse" class="debug-content"></div>
+            </div>
+            <button id="closeDebugButton">Close Debug Info</button>
+        </div>
 
         <div class="image-gallery" id="imageGallery">
             <!-- Generated images will be displayed here -->
