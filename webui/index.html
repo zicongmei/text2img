@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Text to Image Generator (Simulated)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Gemini Text to Image Generator</h1>
+        <p id="explanationNote" class="explanation-note"></p>
+
+        <div class="input-section">
+            <div class="api-key-container">
+                <label for="geminiApiKey">Gemini API Key:</label>
+                <input  id="geminiApiKey" placeholder="Enter your Gemini API Key">
+                <button id="setApiKeyButton">Set Key</button>
+            </div>
+
+            <div class="model-select-container">
+                <label for="geminiModel">Select Model (for Prompt Enhancement):</label>
+                <select id="geminiModel"></select>
+            </div>
+
+            <div class="prompt-container">
+                <label for="promptInput">Prompt:</label>
+                <textarea id="promptInput" rows="3" placeholder="Describe the image you want to generate... (e.g., A fluffy cat sitting on a vintage sofa)"></textarea>
+                <button id="generateImageButton">Generate Images</button>
+            </div>
+        </div>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <div class="image-gallery" id="imageGallery">
+            <!-- Generated images will be displayed here -->
+        </div>
+    </div>
+
+    <script src="text2img.js"></script>
+</body>
+</html>
