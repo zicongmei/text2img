@@ -155,6 +155,7 @@ button:disabled {
     align-items: center;
     min-height: 200px; /* Placeholder height */
     position: relative;
+    padding-bottom: 0; /* Remove padding at bottom as buttons are in own container */
 }
 
 .image-item img {
@@ -164,17 +165,41 @@ button:disabled {
     border-radius: 8px; /* Maintain existing radius */
 }
 
-.image-item .use-input-btn {
-    width: auto;
+/* Styles for button group within image-item */
+.image-item-buttons {
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap if space is tight */
+    gap: 8px; /* Space between buttons */
+    justify-content: center;
+    padding: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.image-item .use-input-btn,
+.image-item .save-image-btn {
+    flex-grow: 1; /* Allow buttons to grow to fill space */
+    width: auto; /* Reset width from global button style */
+    padding: 8px 12px;
     border-radius: 4px;
     font-size: 0.9em;
-    padding: 8px 12px;
-    margin: 10px;
+    margin: 0; /* Reset margin from image-item .use-input-btn */
+}
+
+.image-item .use-input-btn {
     background-color: #6f42c1; /* Different color to distinguish */
 }
 
 .image-item .use-input-btn:hover {
     background-color: #59359a;
+}
+
+.image-item .save-image-btn {
+    background-color: #17a2b8; /* A different color for save */
+}
+
+.image-item .save-image-btn:hover {
+    background-color: #138496;
 }
 
 .image-item .image-error {
@@ -237,6 +262,29 @@ button:disabled {
 .clear-image-btn:hover {
     background-color: #bd2130;
 }
+
+/* New styles for image action buttons (load image) */
+.image-action-buttons {
+    margin-bottom: 15px;
+    text-align: center; /* Center the button */
+}
+
+.image-action-buttons button {
+    width: auto; /* Override 100% width for general buttons */
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px; /* Use smaller radius for these action buttons */
+    cursor: pointer;
+    font-size: 1.1em;
+    transition: background-color 0.2s;
+}
+
+.image-action-buttons button:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
 
 /* Debug and Options Styles */
 
@@ -339,6 +387,17 @@ button:disabled {
     margin-right: 10px;
 }
 
+/* Styles for model-dependent features */
+.feature-disabled-by-model {
+    opacity: 0.6;
+    pointer-events: none; /* Disables all mouse events on children */
+    user-select: none; /* Prevents text selection */
+}
+
+.feature-disabled-by-model label {
+    cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
     .container {
         padding: 20px;
@@ -359,6 +418,9 @@ button:disabled {
     .options-row {
         flex-direction: column;
         gap: 15px;
+    }
+    .image-action-buttons button {
+        width: 100%; /* Make load button full width on small screens */
     }
 }
 

@@ -19,6 +19,8 @@ const GEMINI_IMAGE_MODELS = {
     'gemini-3-pro-image-preview': 'Gemini 3 Pro Preview Image'
 };
 
+const GEMINI_3_PRO_MODEL_ID = 'gemini-3-pro-image-preview'; // Define the Gemini 3 model ID
+
 // Get DOM elements
 const geminiApiKeyInput = document.getElementById('geminiApiKey');
 const setApiKeyButton = document.getElementById('setApiKeyButton');
@@ -33,12 +35,18 @@ const explanationNote = document.getElementById('explanationNote');
 // New Options Elements
 const aspectRatioSelect = document.getElementById('aspectRatioSelect');
 const imageSizeSelect = document.getElementById('imageSizeSelect');
+const imageSizeOptionGroup = document.getElementById('imageSizeOptionGroup'); // Get parent div
 const useGoogleSearchInput = document.getElementById('useGoogleSearch');
+const googleSearchOptionGroup = document.getElementById('googleSearchOptionGroup'); // Get parent div
 
 // Selected Image Elements
 const selectedImageContainer = document.getElementById('selectedImageContainer');
 const selectedInputImage = document.getElementById('selectedInputImage');
 const clearSelectedImageButton = document.getElementById('clearSelectedImageButton');
+
+// New elements for Load Image
+const loadImageButton = document.getElementById('loadImageButton');
+const imageFileInput = document.getElementById('imageFileInput');
 
 // Debug Elements
 const showDebugButton = document.getElementById('showDebugButton');
@@ -81,7 +89,7 @@ function setApiKey() {
     return true;
 }
 
-// Function to load values from localStorage
+// Function to load values from localStorage (excluding model-dependent features for initial setup)
 function loadSettingsFromLocalStorage() {
     // API Key
     const apiKey = getLocalStorageItem('geminiApiKey');
@@ -108,17 +116,9 @@ function loadSettingsFromLocalStorage() {
         aspectRatioSelect.value = storedAspectRatio;
     }
 
-    // Image Size
-    const storedImageSize = getLocalStorageItem('imageSize');
-    if (storedImageSize) {
-        imageSizeSelect.value = storedImageSize;
-    }
-
-    // Google Search
-    const storedUseSearch = getLocalStorageItem('useGoogleSearch');
-    if (storedUseSearch !== null) {
-        useGoogleSearchInput.checked = storedUseSearch === 'true';
-    }
+    // Model-dependent features (Image Size, Google Search) are handled by toggleModelDependentFeatures
+    // We explicitly avoid setting them here to ensure toggleModelDependentFeatures applies the correct state
+    // based on the *currently selected model*. The raw stored values are handled within toggleModelDependentFeatures.
 }
 
 // Function to populate model dropdown and load selected model
@@ -136,14 +136,52 @@ function populateModelSelect() {
         selectedModel = storedModel;
         geminiModelSelect.value = storedModel;
     } else {
-        geminiModelSelect.value = selectedModel; 
+        geminiModelSelect.value = selectedModel; // Set default if no stored or invalid
     }
 }
+
+// Function to toggle model-dependent features (Image Size, Google Search)
+function toggleModelDependentFeatures() {
+    const isGemini3Pro = (selectedModel === GEMINI_3_PRO_MODEL_ID);
+
+    // Toggle Image Size
+    if (isGemini3Pro) {
+        imageSizeSelect.disabled = false;
+        imageSizeOptionGroup.classList.remove('feature-disabled-by-model');
+        const storedImageSize = getLocalStorageItem('imageSize');
+        if (storedImageSize && imageSizeSelect.options.namedItem(storedImageSize)) {
+            imageSizeSelect.value = storedImageSize;
+        } else {
+            imageSizeSelect.value = '1K'; // Default to 1K if no stored value or invalid
+        }
+    } else {
+        imageSizeSelect.disabled = true;
+        imageSizeSelect.value = '1K'; // Force 1K for 2.5 models
+        imageSizeOptionGroup.classList.add('feature-disabled-by-model');
+    }
+
+    // Toggle Google Search Tool
+    if (isGemini3Pro) {
+        useGoogleSearchInput.disabled = false;
+        googleSearchOptionGroup.classList.remove('feature-disabled-by-model');
+        const storedUseSearch = getLocalStorageItem('useGoogleSearch');
+        useGoogleSearchInput.checked = (storedUseSearch === 'true');
+    } else {
+        useGoogleSearchInput.disabled = true;
+        useGoogleSearchInput.checked = false; // Force unchecked for 2.5 models
+        googleSearchOptionGroup.classList.add('feature-disabled-by-model');
+    }
+
+    // Update explanation note to reflect feature status
+    updateExplanationNote();
+}
+
 
 // Function to update the selected model
 function updateSelectedModel() {
     selectedModel = geminiModelSelect.value;
     setLocalStorageItem('selectedModel', selectedModel);
+    toggleModelDependentFeatures(); // Update feature availability based on new model
 }
 
 // Function to update the number of output images
@@ -167,16 +205,22 @@ function updateAspectRatio() {
 }
 
 function updateImageSize() {
-    setLocalStorageItem('imageSize', imageSizeSelect.value);
+    // Only save if the feature is enabled (i.e., for Gemini 3 Pro)
+    if (!imageSizeSelect.disabled) {
+        setLocalStorageItem('imageSize', imageSizeSelect.value);
+    }
 }
 
 function updateUseGoogleSearch() {
-    setLocalStorageItem('useGoogleSearch', useGoogleSearchInput.checked);
+    // Only save if the feature is enabled (i.e., for Gemini 3 Pro)
+    if (!useGoogleSearchInput.disabled) {
+        setLocalStorageItem('useGoogleSearch', useGoogleSearchInput.checked);
+    }
 }
 
 // Input Image Selection Functions
 function selectImageAsInput(base64) {
-    selectedInputImageBase66 = base64;
+    selectedInputImageBase64 = base64;
     selectedInputImage.src = `data:image/png;base64,${base64}`;
     selectedImageContainer.style.display = 'flex';
     statusMessage.textContent = 'Image selected as input for next generation.';
@@ -189,6 +233,20 @@ function clearSelectedInputImage() {
     selectedInputImageBase64 = null;
     selectedInputImage.src = '';
     selectedImageContainer.style.display = 'none';
+}
+
+// Function to save a generated image
+function saveGeneratedImage(base64Image, prompt) {
+    const link = document.createElement('a');
+    link.href = `data:image/png;base64,${base64Image}`;
+    // Sanitize prompt for filename
+    const filename = `gemini_image_${prompt.substring(0, 50).replace(/[^a-z0-9]/gi, '_') || 'generated'}_${Date.now()}.png`;
+    link.download = filename;
+    document.body.appendChild(link); // Required for Firefox
+    link.click();
+    document.body.removeChild(link); // Clean up
+    statusMessage.textContent = 'Image saved successfully!';
+    setTimeout(() => statusMessage.textContent = '', 3000);
 }
 
 // Debug functions
@@ -208,6 +266,22 @@ function showDebugModal() {
 
 function hideDebugModal() {
     debugInfo.style.display = 'none';
+}
+
+function updateExplanationNote() {
+    const isGemini3Pro = (selectedModel === GEMINI_3_PRO_MODEL_ID);
+    let noteText = `
+        <strong>Instructions:</strong>
+        Enter your Gemini API Key. Select options (Model, Aspect Ratio), type a prompt, and click "Generate". 
+        <br><small>To use an image as input, click "Use as Input" on a generated result. You can also "Load Image as Input" from your device.</small>
+    `;
+
+    if (isGemini3Pro) {
+        noteText += `<br><small><strong>Gemini 3 Pro Preview</strong> selected: Image Size and Google Search Tool are available.</small>`;
+    } else {
+        noteText += `<br><small><strong>Gemini 2.5 models</strong> selected: Image Size and Google Search Tool are disabled as they are only supported by Gemini 3 Pro Preview.</small>`;
+    }
+    explanationNote.innerHTML = noteText;
 }
 
 // Function to generate image(s)
@@ -256,20 +330,29 @@ async function generateImage() {
                 });
             }
 
+            const generationConfig = {
+                responseModalities: ["TEXT", "IMAGE"],
+                imageConfig: {
+                    aspectRatio: aspectRatioSelect.value
+                }
+            };
+            
+            // Only add imageSize if it's enabled (i.e., for Gemini 3 Pro)
+            if (!imageSizeSelect.disabled) {
+                generationConfig.imageConfig.imageSize = imageSizeSelect.value;
+            }
+            // For Gemini 2.5 models, imageSize is not supported, so it's omitted when disabled.
+            // The default 1K size is applied by the backend if not specified for 2.5 models.
+
             const imageRequestBody = {
                 contents: [{
                     parts: parts
                 }],
-                generationConfig: {
-                    responseModalities: ["TEXT", "IMAGE"],
-                    imageConfig: {
-                        aspectRatio: aspectRatioSelect.value,
-                        imageSize: imageSizeSelect.value
-                    }
-                }
+                generationConfig: generationConfig
             };
 
-            if (useGoogleSearchInput.checked) {
+            // Only add tools if Google Search is enabled AND checked (i.e., for Gemini 3 Pro)
+            if (!useGoogleSearchInput.disabled && useGoogleSearchInput.checked) {
                 imageRequestBody.tools = [{ google_search: {} }];
             }
 
@@ -319,13 +402,24 @@ async function generateImage() {
                     img.alt = prompt;
                     imgContainer.appendChild(img);
 
+                    const buttonGroup = document.createElement('div');
+                    buttonGroup.classList.add('image-item-buttons'); 
+
                     // Add "Use as Input" button
                     const useInputBtn = document.createElement('button');
                     useInputBtn.textContent = 'Use as Input';
                     useInputBtn.classList.add('use-input-btn');
                     useInputBtn.onclick = () => selectImageAsInput(base64Image);
-                    imgContainer.appendChild(useInputBtn);
+                    buttonGroup.appendChild(useInputBtn);
 
+                    // Add "Save Image" button
+                    const saveImageBtn = document.createElement('button');
+                    saveImageBtn.textContent = 'Save Image';
+                    saveImageBtn.classList.add('save-image-btn');
+                    saveImageBtn.onclick = () => saveGeneratedImage(base64Image, prompt);
+                    buttonGroup.appendChild(saveImageBtn);
+
+                    imgContainer.appendChild(buttonGroup); 
                     imageGallery.appendChild(imgContainer); // Appends each generated image to the gallery
                     successfulGenerations++;
                 } else {
@@ -373,6 +467,36 @@ imageSizeSelect.addEventListener('change', updateImageSize);
 useGoogleSearchInput.addEventListener('change', updateUseGoogleSearch);
 clearSelectedImageButton.addEventListener('click', clearSelectedInputImage);
 
+// Event listener for Load Image button
+loadImageButton.addEventListener('click', () => {
+    imageFileInput.click(); // Trigger the hidden file input click
+});
+
+// Event listener for hidden file input change
+imageFileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        if (!file.type.startsWith('image/')) {
+            statusMessage.textContent = 'Please select an image file.';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result;
+            const base64 = dataUrl.split(',')[1]; // Extract the base64 part
+            selectImageAsInput(base64);
+            imageFileInput.value = ''; // Clear the input so same file can be loaded again
+        };
+        reader.onerror = (error) => {
+            statusMessage.textContent = `Error loading image: ${error}`;
+            console.error('Error loading image:', error);
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+
 generateImageButton.addEventListener('click', generateImage);
 promptInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -388,9 +512,6 @@ document.addEventListener('DOMContentLoaded', () => {
     populateModelSelect();
     loadSettingsFromLocalStorage(); 
     
-    explanationNote.innerHTML = `
-        <strong>Instructions:</strong>
-        Enter your Gemini API Key. Select options (Model, Aspect Ratio, Search Tool), type a prompt, and click "Generate". 
-        <br><small>To use an image as input, click "Use as Input" on a generated result.</small>
-    `;
+    // Now toggle features based on the loaded (or default) model
+    toggleModelDependentFeatures();
 });

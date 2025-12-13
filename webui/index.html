@@ -40,7 +40,7 @@
                     </select>
                 </div>
 
-                <div class="option-group">
+                <div class="option-group" id="imageSizeOptionGroup">
                     <label for="imageSizeSelect">Image Size:</label>
                     <select id="imageSizeSelect">
                         <option value="1K">1K: Standard quality (default, usually 1024x1024 for square)</option>
@@ -51,7 +51,7 @@
             </div>
             
             <div class="options-row">
-                 <div class="option-group checkbox-group">
+                 <div class="option-group checkbox-group" id="googleSearchOptionGroup">
                     <label for="useGoogleSearch">
                         <input type="checkbox" id="useGoogleSearch"> Use Google Search Tool
                     </label>
@@ -95,6 +95,13 @@
         <div class="image-gallery" id="imageGallery">
             <!-- Generated images will be displayed here -->
         </div>
+
+
+            <div class="image-action-buttons">
+                <button id="loadImageButton">Load Image as Input</button>
+                <input type="file" id="imageFileInput" accept="image/png, image/jpeg, image/webp" style="display: none;">
+            </div>
+            
     </div>
 
     <script src="text2img.js"></script>
