@@ -10,6 +10,7 @@ let allApiInteractions = []; // To store all API calls for debug info
 
 // Global totals for summary display
 let totalGenerationTime = 0;
+let generationStartTime = 0; // Capture start time for wall-clock duration
 let totalInputTokens = 0;
 let totalOutputTokens = 0;
 let totalThoughtTokens = 0; // New global for thought tokens
@@ -412,7 +413,7 @@ function logApiInteraction(url, request, response, durationMs, inputTokens, outp
     updateDebugButtonText();
     
     // Update global totals
-    totalGenerationTime += durationMs;
+    // Note: totalGenerationTime is now updated independently to reflect wall-clock time
     totalInputTokens += inputTokens;
     totalOutputTokens += outputTokens;
     totalThoughtTokens += (thoughtTokens || 0);
@@ -578,6 +579,7 @@ async function generateImage() {
     
     allApiInteractions = []; // Clear previous API interactions
     totalGenerationTime = 0; // Reset totals for new generation
+    generationStartTime = performance.now(); // Capture start time
     totalInputTokens = 0;
     totalOutputTokens = 0;
     totalThoughtTokens = 0;
@@ -681,6 +683,9 @@ async function generateSingleImage(prompt) {
     if (processAndDisplayImage(data, prompt)) {
         successfulOutputImages = 1;
     }
+
+    // Update total generation time to reflect time until images are shown
+    totalGenerationTime = performance.now() - generationStartTime;
     
     // Parse Usage Metadata
     let actualInputTokens = inputTextTokens; // Default to estimate
@@ -911,6 +916,9 @@ async function generateBatchImages(prompt, numToGenerate) {
             }
         }
         
+        // Update total generation time to reflect wall-clock time
+        totalGenerationTime = performance.now() - generationStartTime;
+
         // Calculate the output cost for the successful images.
         // The input cost was already logged with the initial batch submission.
         const outputImageCostResult = calculateCost(
