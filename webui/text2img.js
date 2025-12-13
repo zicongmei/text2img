@@ -42,7 +42,6 @@ const clearSelectedImageButton = document.getElementById('clearSelectedImageButt
 
 // Debug Elements
 const showDebugButton = document.getElementById('showDebugButton');
-const sosReportButton = document.getElementById('sosReportButton');
 const debugInfo = document.getElementById('debugInfo');
 const debugUrl = document.getElementById('debugUrl');
 const debugRequest = document.getElementById('debugRequest');
@@ -177,7 +176,7 @@ function updateUseGoogleSearch() {
 
 // Input Image Selection Functions
 function selectImageAsInput(base64) {
-    selectedInputImageBase64 = base64;
+    selectedInputImageBase66 = base64;
     selectedInputImage.src = `data:image/png;base64,${base64}`;
     selectedImageContainer.style.display = 'flex';
     statusMessage.textContent = 'Image selected as input for next generation.';
@@ -198,7 +197,6 @@ function updateDebugInfo(url, request, response) {
     lastApiInteraction.request = request;
     lastApiInteraction.response = response;
     showDebugButton.style.display = 'inline-block';
-    sosReportButton.style.display = 'inline-block';
 }
 
 function showDebugModal() {
@@ -210,33 +208,6 @@ function showDebugModal() {
 
 function hideDebugModal() {
     debugInfo.style.display = 'none';
-}
-
-// Function to generate SOS report
-function generateSosReport() {
-    const report = {
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        appSettings: {
-            model: selectedModel,
-            imageCount: numOutputImages,
-            aspectRatio: aspectRatioSelect.value,
-            imageSize: imageSizeSelect.value,
-            useGoogleSearch: useGoogleSearchInput.checked,
-            hasInputImage: !!selectedInputImageBase64
-        },
-        lastInteraction: lastApiInteraction
-    };
-
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sos-report-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
 }
 
 // Function to generate image(s)
@@ -410,7 +381,6 @@ promptInput.addEventListener('keydown', (event) => {
     }
 });
 showDebugButton.addEventListener('click', showDebugModal);
-sosReportButton.addEventListener('click', generateSosReport);
 closeDebugButton.addEventListener('click', hideDebugModal);
 
 // Initial setup on page load
