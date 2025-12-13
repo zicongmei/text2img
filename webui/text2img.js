@@ -12,6 +12,7 @@ let allApiInteractions = []; // To store all API calls for debug info
 let totalGenerationTime = 0;
 let totalInputTokens = 0;
 let totalOutputTokens = 0;
+let totalThoughtTokens = 0; // New global for thought tokens
 let totalEstimatedCost = 0;
 
 // Model names and labels for image generation
@@ -102,6 +103,7 @@ const closeDebugButton = document.getElementById('closeDebugButton');
 const totalGenerationTimeSpan = document.getElementById('totalGenerationTime');
 const totalInputTokensSpan = document.getElementById('totalInputTokens');
 const totalOutputTokensSpan = document.getElementById('totalOutputTokens');
+const totalThoughtTokensSpan = document.getElementById('totalThoughtTokens'); // New span
 const totalEstimatedCostSpan = document.getElementById('totalEstimatedCost');
 
 
@@ -389,11 +391,12 @@ function updateSummaryDisplay() {
     totalGenerationTimeSpan.textContent = `${(totalGenerationTime / 1000).toFixed(2)}s`;
     totalInputTokensSpan.textContent = totalInputTokens.toLocaleString();
     totalOutputTokensSpan.textContent = totalOutputTokens.toLocaleString();
+    totalThoughtTokensSpan.textContent = totalThoughtTokens.toLocaleString();
     totalEstimatedCostSpan.textContent = `$${totalEstimatedCost.toFixed(6)}`;
 }
 
 // Modify logApiInteraction to store all relevant data
-function logApiInteraction(url, request, response, durationMs, inputTokens, outputTokens, costDetails) {
+function logApiInteraction(url, request, response, durationMs, inputTokens, outputTokens, thoughtTokens, costDetails) {
     const interaction = {
         url,
         request,
@@ -401,6 +404,7 @@ function logApiInteraction(url, request, response, durationMs, inputTokens, outp
         durationMs,
         inputTokens,
         outputTokens,
+        thoughtTokens: thoughtTokens || 0, // Ensure it has a value
         costDetails, // {inputCost, outputCost, totalCost}
         timestamp: new Date().toISOString()
     };
@@ -411,6 +415,7 @@ function logApiInteraction(url, request, response, durationMs, inputTokens, outp
     totalGenerationTime += durationMs;
     totalInputTokens += inputTokens;
     totalOutputTokens += outputTokens;
+    totalThoughtTokens += (thoughtTokens || 0);
     totalEstimatedCost += costDetails.totalCost;
     updateSummaryDisplay(); // Update the main summary
     
@@ -439,6 +444,7 @@ function appendApiCallEntry(interaction, index) {
     metricsDiv.innerHTML = `
         <div class="api-call-metric"><strong>Input Tokens:</strong> ${interaction.inputTokens.toLocaleString()}</div>
         <div class="api-call-metric"><strong>Output Tokens:</strong> ${interaction.outputTokens.toLocaleString()}</div>
+        <div class="api-call-metric"><strong>Thought Tokens:</strong> ${interaction.thoughtTokens.toLocaleString()}</div>
         <div class="api-call-metric"><strong>Estimated Cost:</strong> $${interaction.costDetails.totalCost.toFixed(6)}</div>
     `;
     callDetails.appendChild(metricsDiv);
@@ -574,6 +580,7 @@ async function generateImage() {
     totalGenerationTime = 0; // Reset totals for new generation
     totalInputTokens = 0;
     totalOutputTokens = 0;
+    totalThoughtTokens = 0;
     totalEstimatedCost = 0;
     updateSummaryDisplay(); // Update summary to show zeros
     updateDebugButtonText();
@@ -675,13 +682,21 @@ async function generateSingleImage(prompt) {
         successfulOutputImages = 1;
     }
     
-    // Recalculate cost based on actual successful outputs
-    const finalCostResult = calculateCost(selectedModel, inputTextTokens, inputImagePresent, successfulOutputImages, imageOutputSize);
-    
-    // For output tokens, assuming the 1290 tokens for 2.5 models, 0 for G3P (fixed price)
-    const actualOutputTokens = (selectedModel === GEMINI_3_PRO_MODEL_ID) ? 0 : (successfulOutputImages * TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS);
+    // Parse Usage Metadata
+    let actualInputTokens = inputTextTokens; // Default to estimate
+    let actualOutputTokens = (selectedModel === GEMINI_3_PRO_MODEL_ID) ? 0 : (successfulOutputImages * TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS);
+    let actualThoughtTokens = 0;
 
-    logApiInteraction(imageEndpoint, requestBody, data, duration, finalCostResult.inputTokens, actualOutputTokens, finalCostResult);
+    if (data.usageMetadata) {
+        actualInputTokens = data.usageMetadata.promptTokenCount || 0;
+        actualOutputTokens = data.usageMetadata.candidatesTokenCount || 0;
+        actualThoughtTokens = data.usageMetadata.thoughtsTokenCount || 0;
+    }
+
+    // Recalculate cost based on actual successful outputs (Cost calculation logic remains based on image count for G3P as per pricing table)
+    const finalCostResult = calculateCost(selectedModel, actualInputTokens, inputImagePresent, successfulOutputImages, imageOutputSize);
+
+    logApiInteraction(imageEndpoint, requestBody, data, duration, actualInputTokens, actualOutputTokens, actualThoughtTokens, finalCostResult);
 
     if (!response.ok) {
         throw new Error(data.error?.message || `API Error: ${response.statusText}`);
@@ -784,6 +799,7 @@ async function generateBatchImages(prompt, numToGenerate) {
         batchSubmissionDuration,
         batchSubmissionCostResult.inputTokens, // Total estimated input tokens for the batch
         0, // No output tokens for the submission API call itself
+        0, // No thought tokens for submission
         batchSubmissionCostResult
     );
 
@@ -831,6 +847,7 @@ async function generateBatchImages(prompt, numToGenerate) {
             pollDuration,
             0, // Input tokens for poll request
             0, // Output tokens for poll response
+            0, // Thought tokens for poll response
             { inputCost: 0, outputCost: 0, totalCost: 0 } // Cost for polling
         );
         finalPollInteractionIndex = allApiInteractions.length - 1; // Keep track of the last poll log entry
@@ -859,6 +876,9 @@ async function generateBatchImages(prompt, numToGenerate) {
         }
 
         let successCount = 0;
+        let batchOutputTokens = 0;
+        let batchThoughtTokens = 0;
+
         for (const item of results) {
             // Check for error in individual item
             if (item.status && item.status.code && item.status.code !== 0) {
@@ -880,6 +900,15 @@ async function generateBatchImages(prompt, numToGenerate) {
                  errDiv.textContent = `Image data missing in batch result.`;
                  imageGallery.appendChild(errDiv);
             }
+
+            if (resp.usageMetadata) {
+                batchOutputTokens += resp.usageMetadata.candidatesTokenCount || 0;
+                batchThoughtTokens += resp.usageMetadata.thoughtsTokenCount || 0;
+            } else {
+                 if (selectedModel !== GEMINI_3_PRO_MODEL_ID) {
+                     batchOutputTokens += TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
+                 }
+            }
         }
         
         // Calculate the output cost for the successful images.
@@ -899,13 +928,16 @@ async function generateBatchImages(prompt, numToGenerate) {
             // Subtract previous 0 cost from global total before adding updated cost
             totalEstimatedCost -= lastInteraction.costDetails.totalCost;
             totalOutputTokens -= lastInteraction.outputTokens; // Subtract previous 0 output tokens
+            totalThoughtTokens -= (lastInteraction.thoughtTokens || 0);
 
-            lastInteraction.outputTokens += outputImageCostResult.outputTokens;
+            lastInteraction.outputTokens = batchOutputTokens;
+            lastInteraction.thoughtTokens = batchThoughtTokens;
             lastInteraction.costDetails.outputCost += outputImageCostResult.outputCost;
             lastInteraction.costDetails.totalCost += outputImageCostResult.outputCost; // Add new output cost
             
             // Add updated values to global totals
             totalOutputTokens += lastInteraction.outputTokens;
+            totalThoughtTokens += lastInteraction.thoughtTokens;
             totalEstimatedCost += lastInteraction.costDetails.totalCost;
             updateSummaryDisplay();
             
@@ -919,7 +951,8 @@ async function generateBatchImages(prompt, numToGenerate) {
         } else {
             // Fallback: If for some reason finalPollInteractionIndex is invalid, just update global totals
             console.warn("Could not find suitable last API interaction to attach batch output cost. Updating global totals directly.");
-            totalOutputTokens += outputImageCostResult.outputTokens;
+            totalOutputTokens += batchOutputTokens;
+            totalThoughtTokens += batchThoughtTokens;
             totalEstimatedCost += outputImageCostResult.outputCost;
             updateSummaryDisplay();
         }
