@@ -84,6 +84,7 @@ const imageSizeSelect = document.getElementById('imageSizeSelect');
 const imageSizeOptionGroup = document.getElementById('imageSizeOptionGroup'); // Get parent div
 const useGoogleSearchInput = document.getElementById('useGoogleSearch');
 const googleSearchOptionGroup = document.getElementById('googleSearchOptionGroup'); // Get parent div
+const useBatchModeInput = document.getElementById('useBatchMode'); // Get Batch Mode checkbox
 
 // Selected Image Elements
 const selectedImageContainer = document.getElementById('selectedImageContainer');
@@ -172,6 +173,14 @@ function loadSettingsFromLocalStorage() {
     const storedPrompt = getLocalStorageItem('promptInput');
     if (storedPrompt) {
         promptInput.value = storedPrompt;
+    }
+
+    // Load Batch Mode
+    const storedBatchMode = getLocalStorageItem('useBatchMode');
+    if (storedBatchMode !== null) {
+        useBatchModeInput.checked = (storedBatchMode === 'true');
+    } else {
+        useBatchModeInput.checked = true; // Default to true
     }
 
     // Load Selected Input Images
@@ -290,6 +299,10 @@ function updateUseGoogleSearch() {
     if (!useGoogleSearchInput.disabled) {
         setLocalStorageItem('useGoogleSearch', useGoogleSearchInput.checked);
     }
+}
+
+function updateUseBatchMode() {
+    setLocalStorageItem('useBatchMode', useBatchModeInput.checked);
 }
 
 // Input Image Selection Functions
@@ -645,8 +658,32 @@ async function generateImage() {
 
     try {
         if (numToGenerate > 1) {
-            // Use Batch API for multiple images
-            await generateBatchImages(prompt, numToGenerate);
+            if (useBatchModeInput.checked) {
+                // Use Batch API for multiple images
+                await generateBatchImages(prompt, numToGenerate);
+            } else {
+                 // Sequential generation
+                 for (let i = 0; i < numToGenerate; i++) {
+                     if (abortController.signal.aborted) {
+                         throw new Error('Generation cancelled by user.');
+                     }
+                     statusMessage.textContent = `Generating image ${i + 1} of ${numToGenerate}...`;
+                     try {
+                         await generateSingleImage(prompt);
+                     } catch (e) {
+                         console.error(`Error generating image ${i+1}:`, e);
+                         const errDiv = document.createElement('div');
+                         errDiv.classList.add('image-error');
+                         errDiv.textContent = `Image ${i+1} failed: ${e.message}`;
+                         imageGallery.appendChild(errDiv);
+                     }
+                 }
+                 if (abortController.signal.aborted) {
+                     statusMessage.textContent = 'Generation cancelled.';
+                 } else {
+                     statusMessage.textContent = `Finished generating ${numToGenerate} images.`;
+                 }
+            }
         } else {
             // Use standard API for single image
             await generateSingleImage(prompt);
@@ -1039,6 +1076,7 @@ imageCountInput.addEventListener('input', updateNumOutputImages);
 aspectRatioSelect.addEventListener('change', updateAspectRatio);
 imageSizeSelect.addEventListener('change', updateImageSize);
 useGoogleSearchInput.addEventListener('change', updateUseGoogleSearch);
+useBatchModeInput.addEventListener('change', updateUseBatchMode); // Add Batch Mode listener
 clearAllImagesButton.addEventListener('click', clearAllInputImages);
 promptInput.addEventListener('input', () => {
     setLocalStorageItem('promptInput', promptInput.value);
