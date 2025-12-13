@@ -403,8 +403,8 @@ button:disabled {
     border-radius: 4px;
     max-height: 150px; /* Limit height for individual request/response */
     overflow: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    white-space: pre; /* Changed from pre-wrap to pre to prevent line wrapping */
+    /* Removed word-wrap: break-word as it's not needed with white-space: pre; */
     font-size: 0.9em;
 }
 
