@@ -313,7 +313,56 @@ function updateExplanationNote() {
     explanationNote.innerHTML = noteText;
 }
 
-// Function to generate image(s)
+// Helper to process and display a single image response
+function processAndDisplayImage(imageData, prompt) {
+    let base64Image = null;
+    
+    // Check for standard inlineData (camelCase or snake_case)
+    if (imageData.candidates && imageData.candidates[0] && imageData.candidates[0].content && imageData.candidates[0].content.parts) {
+        for (const part of imageData.candidates[0].content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+                base64Image = part.inlineData.data;
+                break;
+            }
+            if (part.inline_data && part.inline_data.data) {
+                base64Image = part.inline_data.data;
+                break;
+            }
+        }
+    }
+
+    if (base64Image) {
+        const imgContainer = document.createElement('div');
+        imgContainer.classList.add('image-item');
+        
+        const img = document.createElement('img');
+        img.src = `data:image/png;base64,${base64Image}`;
+        img.alt = prompt;
+        imgContainer.appendChild(img);
+
+        const buttonGroup = document.createElement('div');
+        buttonGroup.classList.add('image-item-buttons'); 
+
+        const useInputBtn = document.createElement('button');
+        useInputBtn.textContent = 'Use as Input';
+        useInputBtn.classList.add('use-input-btn');
+        useInputBtn.onclick = () => selectImageAsInput(base64Image);
+        buttonGroup.appendChild(useInputBtn);
+
+        const saveImageBtn = document.createElement('button');
+        saveImageBtn.textContent = 'Save Image';
+        saveImageBtn.classList.add('save-image-btn');
+        saveImageBtn.onclick = () => saveGeneratedImage(base64Image, prompt);
+        buttonGroup.appendChild(saveImageBtn);
+
+        imgContainer.appendChild(buttonGroup); 
+        imageGallery.appendChild(imgContainer); 
+        return true;
+    }
+    return false;
+}
+
+// Main generation function dispatcher
 async function generateImage() {
     const prompt = promptInput.value.trim();
     if (!prompt) {
@@ -328,183 +377,41 @@ async function generateImage() {
     imageGallery.innerHTML = ''; 
     statusMessage.textContent = 'Starting process...';
     
-    // Reset debug info at the start of a new generation batch
     allApiInteractions = [];
     showApiCallsButton.style.display = 'none';
-    debugInfo.style.display = 'none'; // Ensure debug panel is hidden initially
+    debugInfo.style.display = 'none'; 
 
-    // Set up AbortController for stopping the generation
     abortController = new AbortController();
     generateImageButton.disabled = true;
     stopGenerationButton.style.display = 'inline-block';
 
     const numToGenerate = parseInt(imageCountInput.value, 10);
+    // Validation is already handled by updateNumOutputImages mostly, but safe to check here
     if (isNaN(numToGenerate) || numToGenerate < 1) {
-        statusMessage.textContent = 'Please enter a valid number of images (1 or more).';
+        statusMessage.textContent = 'Invalid number of images.';
         generateImageButton.disabled = false;
-        stopGenerationButton.style.display = 'none';
         return;
     }
 
-    let successfulGenerations = 0;
-    let lastError = null;
-
     try {
-        const imageModel = selectedModel;
-        const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${imageModel}:generateContent`;
-        
-        for (let i = 0; i < numToGenerate; i++) {
-            if (abortController.signal.aborted) {
-                statusMessage.textContent = 'Image generation cancelled.';
-                break; // Exit loop if aborted
-            }
-            statusMessage.textContent = `Generating image ${i + 1} of ${numToGenerate}...`;
-
-            // Construct parts array
-            const parts = [{ text: prompt }];
-            if (selectedInputImageBase64) {
-                parts.push({
-                    inline_data: {
-                        mime_type: "image/png",
-                        data: selectedInputImageBase64
-                    }
-                });
-            }
-
-            const generationConfig = {
-                responseModalities: ["TEXT", "IMAGE"],
-                imageConfig: {
-                    aspectRatio: aspectRatioSelect.value
-                }
-            };
-            
-            // Only add imageSize if it's enabled (i.e., for Gemini 3 Pro)
-            if (!imageSizeSelect.disabled) {
-                generationConfig.imageConfig.imageSize = imageSizeSelect.value;
-            }
-
-            const imageRequestBody = {
-                contents: [{
-                    parts: parts
-                }],
-                generationConfig: generationConfig
-            };
-
-            // Only add tools if Google Search is enabled AND checked (i.e., for Gemini 3 Pro)
-            if (!useGoogleSearchInput.disabled && useGoogleSearchInput.checked) {
-                imageRequestBody.tools = [{ google_search: {} }];
-            }
-
-            let imageResponse = null;
-            let imageData = null;
-
-            try {
-                imageResponse = await fetch(imageEndpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Goog-Api-Key': currentApiKey
-                    },
-                    body: JSON.stringify(imageRequestBody),
-                    signal: abortController.signal // Pass the abort signal
-                });
-
-                imageData = await imageResponse.json();
-                
-                // Store this API interaction for debugging
-                allApiInteractions.push({
-                    url: imageEndpoint,
-                    request: imageRequestBody,
-                    response: imageData
-                });
-
-                if (!imageResponse.ok) {
-                    throw new Error(imageData.error?.message || `API Error: ${imageResponse.statusText}`);
-                }
-
-                let base64Image = null;
-                if (imageData.candidates && imageData.candidates[0] && imageData.candidates[0].content && imageData.candidates[0].content.parts) {
-                    for (const part of imageData.candidates[0].content.parts) {
-                        // Check for standard inlineData (camelCase or snake_case)
-                        if (part.inlineData && part.inlineData.data) {
-                            base64Image = part.inlineData.data;
-                            break;
-                        }
-                        if (part.inline_data && part.inline_data.data) {
-                            base64Image = part.inline_data.data;
-                            break;
-                        }
-                    }
-                }
-
-                if (base64Image) {
-                    const imgContainer = document.createElement('div');
-                    imgContainer.classList.add('image-item');
-                    
-                    const img = document.createElement('img');
-                    img.src = `data:image/png;base64,${base64Image}`;
-                    img.alt = prompt;
-                    imgContainer.appendChild(img);
-
-                    const buttonGroup = document.createElement('div');
-                    buttonGroup.classList.add('image-item-buttons'); 
-
-                    // Add "Use as Input" button
-                    const useInputBtn = document.createElement('button');
-                    useInputBtn.textContent = 'Use as Input';
-                    useInputBtn.classList.add('use-input-btn');
-                    useInputBtn.onclick = () => selectImageAsInput(base64Image);
-                    buttonGroup.appendChild(useInputBtn);
-
-                    // Add "Save Image" button
-                    const saveImageBtn = document.createElement('button');
-                    saveImageBtn.textContent = 'Save Image';
-                    saveImageBtn.classList.add('save-image-btn');
-                    saveImageBtn.onclick = () => saveGeneratedImage(base64Image, prompt);
-                    buttonGroup.appendChild(saveImageBtn);
-
-                    imgContainer.appendChild(buttonGroup); 
-                    imageGallery.appendChild(imgContainer); // Appends each generated image to the gallery
-                    successfulGenerations++;
-                } else {
-                    console.error(`No image data found in response for image ${i + 1}`, imageData);
-                    throw new Error('No valid image data found in the API response.');
-                }
-            } catch (innerError) {
-                if (innerError.name === 'AbortError') {
-                    statusMessage.textContent = `Image generation ${i + 1} cancelled.`;
-                    const cancelledDiv = document.createElement('div');
-                    cancelledDiv.classList.add('image-error');
-                    cancelledDiv.textContent = `Image ${i + 1} Cancelled.`;
-                    imageGallery.appendChild(cancelledDiv);
-                    break; // Stop further generations if aborted
-                }
-                console.error(`Error generating image ${i + 1}:`, innerError);
-                lastError = innerError; // Store the last error encountered
-                const errorDiv = document.createElement('div');
-                errorDiv.classList.add('image-error');
-                errorDiv.textContent = `Image ${i + 1} Failed: ${innerError.message}`;
-                imageGallery.appendChild(errorDiv);
-            }
-        }
-
-        if (abortController.signal.aborted) {
-             statusMessage.textContent = `Generation stopped by user. ${successfulGenerations} image(s) completed.`;
-        } else if (successfulGenerations === numToGenerate) {
-            statusMessage.textContent = `${successfulGenerations} image(s) generated successfully!`;
-        } else if (successfulGenerations > 0) {
-            statusMessage.textContent = `Generated ${successfulGenerations} of ${numToGenerate} images. Some failed.`;
+        if (numToGenerate > 1) {
+            // Use Batch API for multiple images
+            await generateBatchImages(prompt, numToGenerate);
         } else {
-            statusMessage.textContent = `Failed to generate any images. Last error: ${lastError ? lastError.message : 'Unknown error.'}`;
+            // Use standard API for single image
+            await generateSingleImage(prompt);
         }
-
-    } catch (error) { // This catch block handles any unexpected outer loop errors
-        console.error('An unexpected error occurred during image generation loop:', error);
-        statusMessage.textContent = `Error: ${error.message}`;
-        const errorDiv = document.createElement('div');
-        errorDiv.classList.add('image-error');
-        errorDiv.textContent = `Overall Generation Failed: ${error.message}`;
-        imageGallery.appendChild(errorDiv);
+    } catch (error) {
+        if (error.name === 'AbortError' || abortController.signal.aborted) {
+             statusMessage.textContent = 'Generation cancelled.';
+        } else {
+             console.error('Generation Error:', error);
+             statusMessage.textContent = `Error: ${error.message}`;
+             const errorDiv = document.createElement('div');
+             errorDiv.classList.add('image-error');
+             errorDiv.textContent = `Failed: ${error.message}`;
+             imageGallery.appendChild(errorDiv);
+        }
     } finally {
         generateImageButton.disabled = false;
         stopGenerationButton.style.display = 'none';
@@ -512,7 +419,209 @@ async function generateImage() {
             showApiCallsButton.textContent = `Show ${allApiInteractions.length} API Call${allApiInteractions.length > 1 ? 's' : ''}`;
             showApiCallsButton.style.display = 'inline-block';
         }
-        abortController = null; // Reset abortController
+        abortController = null;
+    }
+}
+
+// Function to generate a single image (Synchronous/Direct)
+async function generateSingleImage(prompt) {
+    statusMessage.textContent = 'Generating image...';
+
+    const parts = [{ text: prompt }];
+    if (selectedInputImageBase64) {
+        parts.push({
+            inline_data: { mime_type: "image/png", data: selectedInputImageBase64 }
+        });
+    }
+
+    const generationConfig = {
+        responseModalities: ["TEXT", "IMAGE"],
+        imageConfig: { aspectRatio: aspectRatioSelect.value }
+    };
+    if (!imageSizeSelect.disabled) {
+        generationConfig.imageConfig.imageSize = imageSizeSelect.value;
+    }
+
+    const requestBody = {
+        contents: [{ parts: parts }],
+        generationConfig: generationConfig
+    };
+
+    if (!useGoogleSearchInput.disabled && useGoogleSearchInput.checked) {
+        requestBody.tools = [{ google_search: {} }];
+    }
+    
+    const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
+
+    const response = await fetch(imageEndpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': currentApiKey
+        },
+        body: JSON.stringify(requestBody),
+        signal: abortController.signal
+    });
+
+    const data = await response.json();
+    allApiInteractions.push({ url: imageEndpoint, request: requestBody, response: data });
+
+    if (!response.ok) {
+        throw new Error(data.error?.message || `API Error: ${response.statusText}`);
+    }
+
+    if (!processAndDisplayImage(data, prompt)) {
+         throw new Error('No valid image data found in response.');
+    }
+    statusMessage.textContent = 'Image generated successfully!';
+}
+
+// Function to generate multiple images using Batch API
+async function generateBatchImages(prompt, numToGenerate) {
+    statusMessage.textContent = `Preparing batch job for ${numToGenerate} images...`;
+    
+    const requests = [];
+    for (let i = 0; i < numToGenerate; i++) {
+        const parts = [{ text: prompt }];
+        if (selectedInputImageBase64) {
+            parts.push({
+                inline_data: {
+                    mime_type: "image/png",
+                    data: selectedInputImageBase64
+                }
+            });
+        }
+
+        const generationConfig = {
+            responseModalities: ["TEXT", "IMAGE"],
+            imageConfig: {
+                aspectRatio: aspectRatioSelect.value
+            }
+        };
+        
+        if (!imageSizeSelect.disabled) {
+            generationConfig.imageConfig.imageSize = imageSizeSelect.value;
+        }
+
+        const requestReq = {
+            contents: [{ parts: parts }],
+            generationConfig: generationConfig
+        };
+
+        if (!useGoogleSearchInput.disabled && useGoogleSearchInput.checked) {
+            requestReq.tools = [{ google_search: {} }];
+        }
+
+        requests.push({
+            request: requestReq,
+            metadata: { key: `req-${i}` }
+        });
+    }
+
+    const batchRequestBody = {
+        batch: {
+            display_name: `img-gen-${Date.now()}`,
+            input_config: {
+                requests: {
+                    requests: requests
+                }
+            }
+        }
+    };
+
+    const batchEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:batchGenerateContent`;
+
+    const response = await fetch(batchEndpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': currentApiKey
+        },
+        body: JSON.stringify(batchRequestBody),
+        signal: abortController.signal
+    });
+
+    const data = await response.json();
+    allApiInteractions.push({
+        url: batchEndpoint,
+        request: batchRequestBody,
+        response: data
+    });
+
+    if (!response.ok) {
+        throw new Error(data.error?.message || `Batch creation failed: ${response.statusText}`);
+    }
+
+    const batchName = data.name;
+    statusMessage.textContent = `Batch job submitted. Waiting for results...`;
+
+    // Polling Logic
+    let jobState = data.state;
+    let pollData = data;
+    
+    while (jobState !== 'JOB_STATE_SUCCEEDED' && jobState !== 'JOB_STATE_FAILED' && jobState !== 'JOB_STATE_CANCELLED') {
+        if (abortController.signal.aborted) {
+            throw new Error('Generation cancelled by user.');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Poll every 3 seconds
+        
+        const pollResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/${batchName}`, {
+            headers: { 'X-Goog-Api-Key': currentApiKey },
+            signal: abortController.signal
+        });
+        
+        pollData = await pollResponse.json();
+        jobState = pollData.state;
+        statusMessage.textContent = `Batch Processing... State: ${jobState}`;
+    }
+
+    // Capture final poll state for debug
+    allApiInteractions.push({
+        url: `https://generativelanguage.googleapis.com/v1beta/${batchName}`,
+        request: { method: 'GET (Final Poll)' },
+        response: pollData
+    });
+
+    if (jobState === 'JOB_STATE_SUCCEEDED') {
+        // Extract results from dest.inlinedResponses
+        const results = pollData.dest?.inlinedResponses;
+        
+        if (!results || !Array.isArray(results)) {
+            throw new Error('Job succeeded but result format is unexpected (no inlinedResponses).');
+        }
+
+        let successCount = 0;
+        for (const item of results) {
+            // Check for error in individual item
+            if (item.status && item.status.code && item.status.code !== 0) {
+                 const errDiv = document.createElement('div');
+                 errDiv.classList.add('image-error');
+                 errDiv.textContent = `Image failed: ${item.status.message}`;
+                 imageGallery.appendChild(errDiv);
+                 continue;
+            }
+
+            // item.response contains the GenerateContentResponse, or the item itself is the response structure
+            const resp = item.response || item;
+            
+            if (processAndDisplayImage(resp, prompt)) {
+                successCount++;
+            } else {
+                 const errDiv = document.createElement('div');
+                 errDiv.classList.add('image-error');
+                 errDiv.textContent = `Image data missing in batch result.`;
+                 imageGallery.appendChild(errDiv);
+            }
+        }
+        
+        if (successCount === 0) {
+            throw new Error('No valid images were extracted from the batch response.');
+        }
+        statusMessage.textContent = `Successfully generated ${successCount} images via Batch API.`;
+
+    } else {
+        throw new Error(`Batch job ended with state: ${jobState}`);
     }
 }
 
