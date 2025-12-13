@@ -8,6 +8,12 @@ let selectedInputImageBase64 = null; // Store selected image for input
 let abortController = null; // To manage ongoing fetch requests
 let allApiInteractions = []; // To store all API calls for debug info
 
+// Global totals for summary display
+let totalGenerationTime = 0;
+let totalInputTokens = 0;
+let totalOutputTokens = 0;
+let totalEstimatedCost = 0;
+
 // Model names and labels for image generation
 const GEMINI_IMAGE_MODELS = {
     'gemini-2.5-flash-image': 'Gemini 2.5 Flash Image',
@@ -16,6 +22,47 @@ const GEMINI_IMAGE_MODELS = {
 };
 
 const GEMINI_3_PRO_MODEL_ID = 'gemini-3-pro-image-preview'; // Define the Gemini 3 model ID
+
+// Pricing and token constants
+const TOKEN_EQUIVALENTS = {
+    // 1024x1024px image token equivalent for 2.5 models for both input/output
+    IMAGE_DEFAULT_1K_TOKENS: 1290, 
+};
+
+const PRICING_TABLE = {
+    'gemini-3-pro-image-preview': {
+        input: {
+            text_per_m_tokens: 1.00,
+            image_fixed_price: 0.0006, // Per image input
+        },
+        output: {
+            // text_and_thinking_per_m_tokens: 6.00, // Not primarily used for image output pricing in this context
+            image_1K_2K_fixed_price: 0.067, // Per image output for 1K/2K sizes
+            image_4K_fixed_price: 0.12, // Per image output for 4K size
+        },
+    },
+    'gemini-2.5-flash-image': {
+        input: {
+            text_and_image_per_m_tokens: 0.15, // Combined text/image input token price
+        },
+        output: {
+            // Explicitly stated as $0.0195 per image for 1K (1024x1024px)
+            image_1K_fixed_price: 0.0195, 
+        },
+    },
+    'gemini-2.5-pro-image': {
+        input: {
+            // Using small prompt pricing tier for prompts <= 200k tokens
+            text_and_image_per_m_tokens_small_prompt: 0.625, 
+            // text_and_image_per_m_tokens_large_prompt: 1.25, // Assuming small prompts, unlikely for typical UI
+        },
+        output: {
+            // Using small prompt pricing tier for prompts <= 200k tokens
+            text_and_thinking_per_m_tokens_small_prompt: 5.00, 
+            // text_and_thinking_per_m_tokens_large_prompt: 7.50, // Assuming small prompts, unlikely for typical UI
+        },
+    },
+};
 
 // Get DOM elements
 const geminiApiKeyInput = document.getElementById('geminiApiKey');
@@ -50,6 +97,13 @@ const showApiCallsButton = document.getElementById('showApiCallsButton'); // Ren
 const debugInfo = document.getElementById('debugInfo');
 const apiCallsContainer = document.getElementById('apiCallsContainer'); // New container for multiple calls
 const closeDebugButton = document.getElementById('closeDebugButton');
+
+// Summary Display Elements
+const totalGenerationTimeSpan = document.getElementById('totalGenerationTime');
+const totalInputTokensSpan = document.getElementById('totalInputTokens');
+const totalOutputTokensSpan = document.getElementById('totalOutputTokens');
+const totalEstimatedCostSpan = document.getElementById('totalEstimatedCost');
+
 
 // Utility functions for localStorage
 function setLocalStorageItem(name, value) {
@@ -260,10 +314,115 @@ function saveGeneratedImage(base64Image, prompt) {
     setTimeout(() => statusMessage.textContent = '', 3000);
 }
 
+// Token and Price Calculation Logic
+function calculateCost(modelId, inputTextTokens, inputImagePresent, outputImageCount, imageOutputSize) {
+    let inputCost = 0;
+    let outputCost = 0;
+    let totalInputTokensCalculated = inputTextTokens; // Actual tokens contributing to input cost
+    let totalOutputTokensCalculated = 0; // Actual tokens contributing to output cost
+
+    const modelPricing = PRICING_TABLE[modelId];
+    if (!modelPricing) {
+        console.warn(`Pricing info not found for model: ${modelId}`);
+        return { inputCost: 0, outputCost: 0, totalCost: 0, inputTokens: 0, outputTokens: 0 };
+    }
+
+    const TOKENS_PER_MILLION = 1_000_000;
+
+    // --- Input Cost Calculation ---
+    if (modelId === 'gemini-3-pro-image-preview') {
+        inputCost += (inputTextTokens / TOKENS_PER_MILLION) * modelPricing.input.text_per_m_tokens;
+        if (inputImagePresent) {
+            inputCost += modelPricing.input.image_fixed_price;
+        }
+    } else if (modelId === 'gemini-2.5-flash-image') {
+        if (inputImagePresent) {
+            totalInputTokensCalculated += TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
+        }
+        inputCost += (totalInputTokensCalculated / TOKENS_PER_MILLION) * modelPricing.input.text_and_image_per_m_tokens;
+    } else if (modelId === 'gemini-2.5-pro-image') {
+        if (inputImagePresent) {
+            totalInputTokensCalculated += TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
+        }
+        // Assuming small prompt for pricing tier (<= 200k tokens)
+        const inputPricePerM = modelPricing.input.text_and_image_per_m_tokens_small_prompt;
+        inputCost += (totalInputTokensCalculated / TOKENS_PER_MILLION) * inputPricePerM;
+    }
+
+    // --- Output Cost Calculation ---
+    if (outputImageCount > 0) {
+        if (modelId === 'gemini-3-pro-image-preview') {
+            if (imageOutputSize === '4K') {
+                outputCost += outputImageCount * modelPricing.output.image_4K_fixed_price;
+            } else { // '1K' or '2K'
+                outputCost += outputImageCount * modelPricing.output.image_1K_2K_fixed_price;
+            }
+        } else if (modelId === 'gemini-2.5-flash-image') {
+            // Use fixed per-image price for Flash as per table "equivalent to $0.0195 per image"
+            outputCost += outputImageCount * modelPricing.output.image_1K_fixed_price;
+            totalOutputTokensCalculated = outputImageCount * TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
+        } else if (modelId === 'gemini-2.5-pro-image') {
+            totalOutputTokensCalculated = outputImageCount * TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
+            // Assuming small prompt for output pricing tier too
+            const outputPricePerM = modelPricing.output.text_and_thinking_per_m_tokens_small_prompt;
+            outputCost += (totalOutputTokensCalculated / TOKENS_PER_MILLION) * outputPricePerM;
+        }
+    }
+
+    return {
+        inputCost: inputCost,
+        outputCost: outputCost,
+        totalCost: inputCost + outputCost,
+        inputTokens: totalInputTokensCalculated,
+        outputTokens: totalOutputTokensCalculated,
+    };
+}
+
+
 // Debug functions
 function updateDebugButtonText() {
     const count = allApiInteractions.length;
     showApiCallsButton.textContent = `Show ${count} API Call${count !== 1 ? 's' : ''}`;
+}
+
+function updateSummaryDisplay() {
+    totalGenerationTimeSpan.textContent = `${(totalGenerationTime / 1000).toFixed(2)}s`;
+    totalInputTokensSpan.textContent = totalInputTokens.toLocaleString();
+    totalOutputTokensSpan.textContent = totalOutputTokens.toLocaleString();
+    totalEstimatedCostSpan.textContent = `$${totalEstimatedCost.toFixed(6)}`;
+}
+
+// Modify logApiInteraction to store all relevant data
+function logApiInteraction(url, request, response, durationMs, inputTokens, outputTokens, costDetails) {
+    const interaction = {
+        url,
+        request,
+        response,
+        durationMs,
+        inputTokens,
+        outputTokens,
+        costDetails, // {inputCost, outputCost, totalCost}
+        timestamp: new Date().toISOString()
+    };
+    allApiInteractions.push(interaction);
+    updateDebugButtonText();
+    
+    // Update global totals
+    totalGenerationTime += durationMs;
+    totalInputTokens += inputTokens;
+    totalOutputTokens += outputTokens;
+    totalEstimatedCost += costDetails.totalCost;
+    updateSummaryDisplay(); // Update the main summary
+    
+    // If debug window is visible, append the new entry immediately
+    if (debugInfo.style.display !== 'none') {
+        const noCallsMsg = apiCallsContainer.querySelector('p');
+        if (noCallsMsg && noCallsMsg.textContent.includes('No API calls')) {
+            apiCallsContainer.innerHTML = '';
+        }
+        appendApiCallEntry(interaction, allApiInteractions.length - 1);
+        apiCallsContainer.scrollTop = apiCallsContainer.scrollHeight;
+    }
 }
 
 function appendApiCallEntry(interaction, index) {
@@ -272,8 +431,17 @@ function appendApiCallEntry(interaction, index) {
 
     const summary = document.createElement('summary');
     const endpointName = interaction.url.split('/').pop().split('?')[0]; // Extract endpoint name
-    summary.innerHTML = `<h4>API Call ${index + 1}: ${endpointName}</h4>`;
+    summary.innerHTML = `<h4>API Call ${index + 1}: ${endpointName} (${(interaction.durationMs / 1000).toFixed(2)}s)</h4>`;
     callDetails.appendChild(summary);
+
+    const metricsDiv = document.createElement('div');
+    metricsDiv.classList.add('api-call-metrics');
+    metricsDiv.innerHTML = `
+        <div class="api-call-metric"><strong>Input Tokens:</strong> ${interaction.inputTokens.toLocaleString()}</div>
+        <div class="api-call-metric"><strong>Output Tokens:</strong> ${interaction.outputTokens.toLocaleString()}</div>
+        <div class="api-call-metric"><strong>Estimated Cost:</strong> $${interaction.costDetails.totalCost.toFixed(6)}</div>
+    `;
+    callDetails.appendChild(metricsDiv);
 
     const endpointDiv = document.createElement('div');
     endpointDiv.classList.add('debug-section');
@@ -300,25 +468,6 @@ function appendApiCallEntry(interaction, index) {
     callDetails.appendChild(responseDiv);
 
     apiCallsContainer.appendChild(callDetails);
-}
-
-function logApiInteraction(url, request, response) {
-    const interaction = { url, request, response };
-    allApiInteractions.push(interaction);
-    updateDebugButtonText();
-    
-    // If debug window is visible, append the new entry immediately
-    if (debugInfo.style.display !== 'none') {
-        // If it was showing "No API calls", clear that first
-        const noCallsMsg = apiCallsContainer.querySelector('p');
-        if (noCallsMsg && noCallsMsg.textContent.includes('No API calls')) {
-            apiCallsContainer.innerHTML = '';
-        }
-        
-        appendApiCallEntry(interaction, allApiInteractions.length - 1);
-        // Scroll to bottom
-        apiCallsContainer.scrollTop = apiCallsContainer.scrollHeight;
-    }
 }
 
 function showApiCallsModal() {
@@ -421,7 +570,12 @@ async function generateImage() {
     imageGallery.innerHTML = ''; 
     statusMessage.textContent = 'Starting process...';
     
-    allApiInteractions = [];
+    allApiInteractions = []; // Clear previous API interactions
+    totalGenerationTime = 0; // Reset totals for new generation
+    totalInputTokens = 0;
+    totalOutputTokens = 0;
+    totalEstimatedCost = 0;
+    updateSummaryDisplay(); // Update summary to show zeros
     updateDebugButtonText();
     showApiCallsButton.style.display = 'inline-block'; // Show debug button immediately
     debugInfo.style.display = 'none'; // Ensure debug panel is closed initially
@@ -469,7 +623,8 @@ async function generateSingleImage(prompt) {
     statusMessage.textContent = 'Generating image...';
 
     const parts = [{ text: prompt }];
-    if (selectedInputImageBase64) {
+    const inputImagePresent = !!selectedInputImageBase64;
+    if (inputImagePresent) {
         parts.push({
             inline_data: { mime_type: "image/png", data: selectedInputImageBase64 }
         });
@@ -479,8 +634,9 @@ async function generateSingleImage(prompt) {
         responseModalities: ["TEXT", "IMAGE"],
         imageConfig: { aspectRatio: aspectRatioSelect.value }
     };
-    if (!imageSizeSelect.disabled) {
-        generationConfig.imageConfig.imageSize = imageSizeSelect.value;
+    const imageOutputSize = imageSizeSelect.value;
+    if (!imageSizeSelect.disabled) { // Only for Gemini 3 Pro
+        generationConfig.imageConfig.imageSize = imageOutputSize;
     }
 
     const requestBody = {
@@ -494,6 +650,12 @@ async function generateSingleImage(prompt) {
     
     const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
 
+    const apiCallStartTime = performance.now();
+    const inputTextTokens = Math.ceil(prompt.length / 4); // Estimate based on char count
+
+    // Calculate cost for this API call (1 output image expected)
+    const costResult = calculateCost(selectedModel, inputTextTokens, inputImagePresent, 1, imageOutputSize);
+
     const response = await fetch(imageEndpoint, {
         method: 'POST',
         headers: {
@@ -505,13 +667,27 @@ async function generateSingleImage(prompt) {
     });
 
     const data = await response.json();
-    logApiInteraction(imageEndpoint, requestBody, data);
+    const apiCallEndTime = performance.now();
+    const duration = apiCallEndTime - apiCallStartTime;
+
+    let successfulOutputImages = 0;
+    if (processAndDisplayImage(data, prompt)) {
+        successfulOutputImages = 1;
+    }
+    
+    // Recalculate cost based on actual successful outputs
+    const finalCostResult = calculateCost(selectedModel, inputTextTokens, inputImagePresent, successfulOutputImages, imageOutputSize);
+    
+    // For output tokens, assuming the 1290 tokens for 2.5 models, 0 for G3P (fixed price)
+    const actualOutputTokens = (selectedModel === GEMINI_3_PRO_MODEL_ID) ? 0 : (successfulOutputImages * TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS);
+
+    logApiInteraction(imageEndpoint, requestBody, data, duration, finalCostResult.inputTokens, actualOutputTokens, finalCostResult);
 
     if (!response.ok) {
         throw new Error(data.error?.message || `API Error: ${response.statusText}`);
     }
 
-    if (!processAndDisplayImage(data, prompt)) {
+    if (successfulOutputImages === 0) {
          throw new Error('No valid image data found in response.');
     }
     statusMessage.textContent = 'Image generated successfully!';
@@ -522,9 +698,12 @@ async function generateBatchImages(prompt, numToGenerate) {
     statusMessage.textContent = `Preparing batch job for ${numToGenerate} images...`;
     
     const requests = [];
+    const inputImagePresentForAllRequests = !!selectedInputImageBase64;
+    const imageOutputSizeForBatch = imageSizeSelect.value;
+
     for (let i = 0; i < numToGenerate; i++) {
         const parts = [{ text: prompt }];
-        if (selectedInputImageBase64) {
+        if (inputImagePresentForAllRequests) {
             parts.push({
                 inline_data: {
                     mime_type: "image/png",
@@ -540,8 +719,8 @@ async function generateBatchImages(prompt, numToGenerate) {
             }
         };
         
-        if (!imageSizeSelect.disabled) {
-            generationConfig.imageConfig.imageSize = imageSizeSelect.value;
+        if (!imageSizeSelect.disabled) { // Only for Gemini 3 Pro
+            generationConfig.imageConfig.imageSize = imageOutputSizeForBatch;
         }
 
         const requestReq = {
@@ -572,6 +751,18 @@ async function generateBatchImages(prompt, numToGenerate) {
 
     const batchEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:batchGenerateContent`;
 
+    const batchSubmissionStartTime = performance.now();
+    const totalInputTextTokens = Math.ceil(prompt.length / 4) * numToGenerate; // Sum of prompt tokens for all individual requests
+
+    // Calculate input cost for the entire batch submission. Output tokens are 0 for the submission response.
+    const batchSubmissionCostResult = calculateCost(
+        selectedModel,
+        totalInputTextTokens,
+        inputImagePresentForAllRequests,
+        0, // No output images in submission response
+        imageOutputSizeForBatch
+    );
+
     const response = await fetch(batchEndpoint, {
         method: 'POST',
         headers: {
@@ -582,8 +773,19 @@ async function generateBatchImages(prompt, numToGenerate) {
         signal: abortController.signal
     });
 
-    const data = await response.json();
-    logApiInteraction(batchEndpoint, batchRequestBody, data);
+    const data = await response.json(); // Data is the Operation object
+    const batchSubmissionEndTime = performance.now();
+    const batchSubmissionDuration = batchSubmissionEndTime - batchSubmissionStartTime;
+
+    logApiInteraction(
+        batchEndpoint,
+        batchRequestBody,
+        data,
+        batchSubmissionDuration,
+        batchSubmissionCostResult.inputTokens, // Total estimated input tokens for the batch
+        0, // No output tokens for the submission API call itself
+        batchSubmissionCostResult
+    );
 
     if (!response.ok) {
         throw new Error(data.error?.message || `Batch creation failed: ${response.statusText}`);
@@ -601,8 +803,8 @@ async function generateBatchImages(prompt, numToGenerate) {
 
     let jobState = getBatchState(data);
     let pollData = data;
-    
-    // Loop until terminal state. Note: API uses BATCH_STATE prefixes.
+    let finalPollInteractionIndex = -1; // To store index of the last poll interaction to update output cost
+
     while (jobState !== 'BATCH_STATE_SUCCEEDED' && jobState !== 'BATCH_STATE_FAILED' && jobState !== 'BATCH_STATE_CANCELLED') {
         if (abortController.signal.aborted) {
             throw new Error('Generation cancelled by user.');
@@ -610,6 +812,7 @@ async function generateBatchImages(prompt, numToGenerate) {
         
         await new Promise(resolve => setTimeout(resolve, 3000)); // Poll every 3 seconds
         
+        const pollStartTime = performance.now();
         const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${batchName}`;
         const pollResponse = await fetch(pollUrl, {
             headers: { 'X-Goog-Api-Key': currentApiKey },
@@ -617,9 +820,20 @@ async function generateBatchImages(prompt, numToGenerate) {
         });
         
         pollData = await pollResponse.json();
-        
-        // Log every polling query
-        logApiInteraction(pollUrl, { method: 'GET (Poll Status)' }, pollData);
+        const pollEndTime = performance.now();
+        const pollDuration = pollEndTime - pollStartTime;
+
+        // Polling queries incur 0 input/output tokens and 0 cost for themselves
+        logApiInteraction(
+            pollUrl,
+            { method: 'GET (Poll Status)' },
+            pollData,
+            pollDuration,
+            0, // Input tokens for poll request
+            0, // Output tokens for poll response
+            { inputCost: 0, outputCost: 0, totalCost: 0 } // Cost for polling
+        );
+        finalPollInteractionIndex = allApiInteractions.length - 1; // Keep track of the last poll log entry
         
         jobState = getBatchState(pollData);
         
@@ -633,13 +847,10 @@ async function generateBatchImages(prompt, numToGenerate) {
 
     if (jobState === 'BATCH_STATE_SUCCEEDED') {
         // Extract results
-        // Handle nested structure found in responses
         let results = null;
         if (pollData.response && pollData.response.inlinedResponses && pollData.response.inlinedResponses.inlinedResponses) {
-            // Nested array as per user trace
             results = pollData.response.inlinedResponses.inlinedResponses;
         } else if (pollData.dest && pollData.dest.inlinedResponses) {
-            // Fallback for previous structure
             results = pollData.dest.inlinedResponses;
         }
         
@@ -671,6 +882,48 @@ async function generateBatchImages(prompt, numToGenerate) {
             }
         }
         
+        // Calculate the output cost for the successful images.
+        // The input cost was already logged with the initial batch submission.
+        const outputImageCostResult = calculateCost(
+            selectedModel,
+            0, // Input tokens for this "output-only" calculation are 0
+            false, // No input image present for this output-only calculation
+            successCount, // Only count successfully generated images for output cost
+            imageOutputSizeForBatch
+        );
+
+        // Update the last poll interaction entry with the output cost and tokens
+        if (finalPollInteractionIndex !== -1 && allApiInteractions[finalPollInteractionIndex]) {
+            const lastInteraction = allApiInteractions[finalPollInteractionIndex];
+            
+            // Subtract previous 0 cost from global total before adding updated cost
+            totalEstimatedCost -= lastInteraction.costDetails.totalCost;
+            totalOutputTokens -= lastInteraction.outputTokens; // Subtract previous 0 output tokens
+
+            lastInteraction.outputTokens += outputImageCostResult.outputTokens;
+            lastInteraction.costDetails.outputCost += outputImageCostResult.outputCost;
+            lastInteraction.costDetails.totalCost += outputImageCostResult.outputCost; // Add new output cost
+            
+            // Add updated values to global totals
+            totalOutputTokens += lastInteraction.outputTokens;
+            totalEstimatedCost += lastInteraction.costDetails.totalCost;
+            updateSummaryDisplay();
+            
+            // Re-render the last API call entry in debug modal if open
+            if (debugInfo.style.display !== 'none') {
+                // Remove and re-add the updated entry
+                apiCallsContainer.innerHTML = ''; 
+                allApiInteractions.forEach((interaction, idx) => appendApiCallEntry(interaction, idx));
+                apiCallsContainer.scrollTop = apiCallsContainer.scrollHeight;
+            }
+        } else {
+            // Fallback: If for some reason finalPollInteractionIndex is invalid, just update global totals
+            console.warn("Could not find suitable last API interaction to attach batch output cost. Updating global totals directly.");
+            totalOutputTokens += outputImageCostResult.outputTokens;
+            totalEstimatedCost += outputImageCostResult.outputCost;
+            updateSummaryDisplay();
+        }
+
         if (successCount === 0) {
             throw new Error('No valid images were extracted from the batch response.');
         }
@@ -755,4 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Now toggle features based on the loaded (or default) model
     toggleModelDependentFeatures();
+
+    // Initialize summary display
+    updateSummaryDisplay();
 });
