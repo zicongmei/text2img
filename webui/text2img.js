@@ -3,6 +3,7 @@
 let currentApiKey = '';
 let selectedModel = 'gemini-2.5-flash-image'; // Default model for image generation
 let numOutputImages = 1; // Default number of images to generate
+let selectedInputImageBase64 = null; // Store selected image for input
 
 // Store last API interactions for debugging
 let lastApiInteraction = {
@@ -33,6 +34,11 @@ const explanationNote = document.getElementById('explanationNote');
 const aspectRatioSelect = document.getElementById('aspectRatioSelect');
 const imageSizeSelect = document.getElementById('imageSizeSelect');
 const useGoogleSearchInput = document.getElementById('useGoogleSearch');
+
+// Selected Image Elements
+const selectedImageContainer = document.getElementById('selectedImageContainer');
+const selectedInputImage = document.getElementById('selectedInputImage');
+const clearSelectedImageButton = document.getElementById('clearSelectedImageButton');
 
 // Debug Elements
 const showDebugButton = document.getElementById('showDebugButton');
@@ -169,6 +175,23 @@ function updateUseGoogleSearch() {
     setLocalStorageItem('useGoogleSearch', useGoogleSearchInput.checked);
 }
 
+// Input Image Selection Functions
+function selectImageAsInput(base64) {
+    selectedInputImageBase64 = base64;
+    selectedInputImage.src = `data:image/png;base64,${base64}`;
+    selectedImageContainer.style.display = 'flex';
+    statusMessage.textContent = 'Image selected as input for next generation.';
+    
+    // Scroll up to show the selection
+    selectedImageContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function clearSelectedInputImage() {
+    selectedInputImageBase64 = null;
+    selectedInputImage.src = '';
+    selectedImageContainer.style.display = 'none';
+}
+
 // Debug functions
 function updateDebugInfo(url, request, response) {
     lastApiInteraction.url = url;
@@ -199,7 +222,8 @@ function generateSosReport() {
             imageCount: numOutputImages,
             aspectRatio: aspectRatioSelect.value,
             imageSize: imageSizeSelect.value,
-            useGoogleSearch: useGoogleSearchInput.checked
+            useGoogleSearch: useGoogleSearchInput.checked,
+            hasInputImage: !!selectedInputImageBase64
         },
         lastInteraction: lastApiInteraction
     };
@@ -250,11 +274,20 @@ async function generateImage() {
         for (let i = 0; i < numToGenerate; i++) {
             statusMessage.textContent = `Generating image ${i + 1} of ${numToGenerate}...`;
 
+            // Construct parts array
+            const parts = [{ text: prompt }];
+            if (selectedInputImageBase64) {
+                parts.push({
+                    inline_data: {
+                        mime_type: "image/png",
+                        data: selectedInputImageBase64
+                    }
+                });
+            }
+
             const imageRequestBody = {
                 contents: [{
-                    parts: [
-                        { text: prompt }
-                    ]
+                    parts: parts
                 }],
                 generationConfig: {
                     responseModalities: ["TEXT", "IMAGE"],
@@ -309,10 +342,19 @@ async function generateImage() {
                 if (base64Image) {
                     const imgContainer = document.createElement('div');
                     imgContainer.classList.add('image-item');
+                    
                     const img = document.createElement('img');
                     img.src = `data:image/png;base64,${base64Image}`;
                     img.alt = prompt;
                     imgContainer.appendChild(img);
+
+                    // Add "Use as Input" button
+                    const useInputBtn = document.createElement('button');
+                    useInputBtn.textContent = 'Use as Input';
+                    useInputBtn.classList.add('use-input-btn');
+                    useInputBtn.onclick = () => selectImageAsInput(base64Image);
+                    imgContainer.appendChild(useInputBtn);
+
                     imageGallery.appendChild(imgContainer); // Appends each generated image to the gallery
                     successfulGenerations++;
                 } else {
@@ -358,6 +400,7 @@ imageCountInput.addEventListener('input', updateNumOutputImages);
 aspectRatioSelect.addEventListener('change', updateAspectRatio);
 imageSizeSelect.addEventListener('change', updateImageSize);
 useGoogleSearchInput.addEventListener('change', updateUseGoogleSearch);
+clearSelectedImageButton.addEventListener('click', clearSelectedInputImage);
 
 generateImageButton.addEventListener('click', generateImage);
 promptInput.addEventListener('keydown', (event) => {
@@ -378,6 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
     explanationNote.innerHTML = `
         <strong>Instructions:</strong>
         Enter your Gemini API Key. Select options (Model, Aspect Ratio, Search Tool), type a prompt, and click "Generate". 
-        <br><small>If you encounter issues, use the "Show Last API Request/Response" button to inspect the raw API data.</small>
+        <br><small>To use an image as input, click "Use as Input" on a generated result.</small>
     `;
 });

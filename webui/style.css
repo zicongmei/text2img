@@ -150,16 +150,31 @@ button:disabled {
     overflow: hidden;
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
     display: flex;
+    flex-direction: column; /* Changed to column to stack image and button */
     justify-content: center;
     align-items: center;
     min-height: 200px; /* Placeholder height */
+    position: relative;
 }
 
 .image-item img {
     max-width: 100%;
     height: auto;
     display: block;
-    border-radius: 8px;
+    border-radius: 8px; /* Maintain existing radius */
+}
+
+.image-item .use-input-btn {
+    width: auto;
+    border-radius: 4px;
+    font-size: 0.9em;
+    padding: 8px 12px;
+    margin: 10px;
+    background-color: #6f42c1; /* Different color to distinguish */
+}
+
+.image-item .use-input-btn:hover {
+    background-color: #59359a;
 }
 
 .image-item .image-error {
@@ -168,7 +183,62 @@ button:disabled {
     padding: 10px;
 }
 
-/* Styles moved from HTML and new styles */
+/* Selected Image Styles */
+.selected-image-container {
+    margin-bottom: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.selected-image-container label {
+    margin-bottom: 0;
+    min-width: 100px;
+}
+
+.selected-image-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.selected-image-wrapper img {
+    height: 80px;
+    width: auto;
+    border-radius: 4px;
+    border: 1px solid #adb5bd;
+    display: block;
+}
+
+.clear-image-btn {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background-color: #dc3545;
+    color: white;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    margin-top: 0; /* Reset global button margin */
+}
+
+.clear-image-btn:hover {
+    background-color: #bd2130;
+}
+
+/* Debug and Options Styles */
 
 .debug-container {
     margin-top: 20px;
