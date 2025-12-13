@@ -22,15 +22,21 @@ const GEMINI_IMAGE_MODELS = {
 const geminiApiKeyInput = document.getElementById('geminiApiKey');
 const setApiKeyButton = document.getElementById('setApiKeyButton');
 const geminiModelSelect = document.getElementById('geminiModel');
-const imageCountInput = document.getElementById('imageCountInput'); // New
+const imageCountInput = document.getElementById('imageCountInput');
 const promptInput = document.getElementById('promptInput');
 const generateImageButton = document.getElementById('generateImageButton');
 const imageGallery = document.getElementById('imageGallery');
 const statusMessage = document.getElementById('statusMessage');
 const explanationNote = document.getElementById('explanationNote');
 
+// New Options Elements
+const aspectRatioSelect = document.getElementById('aspectRatioSelect');
+const imageSizeSelect = document.getElementById('imageSizeSelect');
+const useGoogleSearchInput = document.getElementById('useGoogleSearch');
+
 // Debug Elements
 const showDebugButton = document.getElementById('showDebugButton');
+const sosReportButton = document.getElementById('sosReportButton');
 const debugInfo = document.getElementById('debugInfo');
 const debugUrl = document.getElementById('debugUrl');
 const debugRequest = document.getElementById('debugRequest');
@@ -71,25 +77,42 @@ function setApiKey() {
 }
 
 // Function to load values from localStorage
-function loadApiKeyFromLocalStorage() {
+function loadSettingsFromLocalStorage() {
+    // API Key
     const apiKey = getLocalStorageItem('geminiApiKey');
     if (apiKey) {
         geminiApiKeyInput.value = apiKey;
         currentApiKey = apiKey;
-        statusMessage.textContent = 'API Key loaded from local storage!';
+        statusMessage.textContent = 'Settings loaded from local storage!';
         setTimeout(() => statusMessage.textContent = '', 3000);
     }
 
-    // Load numOutputImages
+    // Number of Images
     const storedNumImages = getLocalStorageItem('numOutputImages');
     if (storedNumImages !== null) {
         numOutputImages = parseInt(storedNumImages, 10);
-        if (isNaN(numOutputImages) || numOutputImages < 1) { // Ensure valid number
+        if (isNaN(numOutputImages) || numOutputImages < 1) { 
             numOutputImages = 1;
         }
         imageCountInput.value = numOutputImages;
-    } else {
-        imageCountInput.value = numOutputImages; // Set default in input if not stored
+    }
+
+    // Aspect Ratio
+    const storedAspectRatio = getLocalStorageItem('aspectRatio');
+    if (storedAspectRatio) {
+        aspectRatioSelect.value = storedAspectRatio;
+    }
+
+    // Image Size
+    const storedImageSize = getLocalStorageItem('imageSize');
+    if (storedImageSize) {
+        imageSizeSelect.value = storedImageSize;
+    }
+
+    // Google Search
+    const storedUseSearch = getLocalStorageItem('useGoogleSearch');
+    if (storedUseSearch !== null) {
+        useGoogleSearchInput.checked = storedUseSearch === 'true';
     }
 }
 
@@ -116,8 +139,6 @@ function populateModelSelect() {
 function updateSelectedModel() {
     selectedModel = geminiModelSelect.value;
     setLocalStorageItem('selectedModel', selectedModel);
-    statusMessage.textContent = `Model set to: ${selectedModel}`;
-    setTimeout(() => statusMessage.textContent = '', 3000);
 }
 
 // Function to update the number of output images
@@ -134,8 +155,18 @@ function updateNumOutputImages() {
     }
     numOutputImages = value; // Update global variable
     setLocalStorageItem('numOutputImages', numOutputImages);
-    statusMessage.textContent = `Number of images set to: ${numOutputImages}`;
-    setTimeout(() => statusMessage.textContent = '', 3000);
+}
+
+function updateAspectRatio() {
+    setLocalStorageItem('aspectRatio', aspectRatioSelect.value);
+}
+
+function updateImageSize() {
+    setLocalStorageItem('imageSize', imageSizeSelect.value);
+}
+
+function updateUseGoogleSearch() {
+    setLocalStorageItem('useGoogleSearch', useGoogleSearchInput.checked);
 }
 
 // Debug functions
@@ -144,6 +175,7 @@ function updateDebugInfo(url, request, response) {
     lastApiInteraction.request = request;
     lastApiInteraction.response = response;
     showDebugButton.style.display = 'inline-block';
+    sosReportButton.style.display = 'inline-block';
 }
 
 function showDebugModal() {
@@ -155,6 +187,32 @@ function showDebugModal() {
 
 function hideDebugModal() {
     debugInfo.style.display = 'none';
+}
+
+// Function to generate SOS report
+function generateSosReport() {
+    const report = {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        appSettings: {
+            model: selectedModel,
+            imageCount: numOutputImages,
+            aspectRatio: aspectRatioSelect.value,
+            imageSize: imageSizeSelect.value,
+            useGoogleSearch: useGoogleSearchInput.checked
+        },
+        lastInteraction: lastApiInteraction
+    };
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sos-report-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // Function to generate image(s)
@@ -197,8 +255,19 @@ async function generateImage() {
                     parts: [
                         { text: prompt }
                     ]
-                }]
+                }],
+                generationConfig: {
+                    responseModalities: ["TEXT", "IMAGE"],
+                    imageConfig: {
+                        aspectRatio: aspectRatioSelect.value,
+                        imageSize: imageSizeSelect.value
+                    }
+                }
             };
+
+            if (useGoogleSearchInput.checked) {
+                imageRequestBody.tools = [{ google_search: {} }];
+            }
 
             let imageResponse = null;
             let imageData = null;
@@ -284,8 +353,12 @@ async function generateImage() {
 // Event Listeners
 setApiKeyButton.addEventListener('click', setApiKey);
 geminiModelSelect.addEventListener('change', updateSelectedModel);
-imageCountInput.addEventListener('change', updateNumOutputImages); // Save on change
-imageCountInput.addEventListener('input', updateNumOutputImages); // Also update on input for immediate feedback/save
+imageCountInput.addEventListener('change', updateNumOutputImages); 
+imageCountInput.addEventListener('input', updateNumOutputImages);
+aspectRatioSelect.addEventListener('change', updateAspectRatio);
+imageSizeSelect.addEventListener('change', updateImageSize);
+useGoogleSearchInput.addEventListener('change', updateUseGoogleSearch);
+
 generateImageButton.addEventListener('click', generateImage);
 promptInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -294,17 +367,17 @@ promptInput.addEventListener('keydown', (event) => {
     }
 });
 showDebugButton.addEventListener('click', showDebugModal);
+sosReportButton.addEventListener('click', generateSosReport);
 closeDebugButton.addEventListener('click', hideDebugModal);
 
 // Initial setup on page load
 document.addEventListener('DOMContentLoaded', () => {
     populateModelSelect();
-    loadApiKeyFromLocalStorage(); // This now also handles image count and API key
+    loadSettingsFromLocalStorage(); 
     
     explanationNote.innerHTML = `
         <strong>Instructions:</strong>
-        Enter your Gemini API Key. Select an image generation model, choose the number of images to generate (default: 1), type a prompt, and click "Generate". 
-        The tool sends your prompt directly to the selected model. Note: Each image requested results in a separate API call.
-        <br><small>If you encounter issues, use the "Show Last API Request/Response" button to inspect the raw API data (this will show the request/response for the last image generation attempt in a batch).</small>
+        Enter your Gemini API Key. Select options (Model, Aspect Ratio, Search Tool), type a prompt, and click "Generate". 
+        <br><small>If you encounter issues, use the "Show Last API Request/Response" button to inspect the raw API data.</small>
     `;
 });

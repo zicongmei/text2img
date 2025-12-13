@@ -5,73 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gemini Text to Image Generator</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        .debug-container {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-family: monospace;
-            display: none;
-        }
-        .debug-section {
-            margin-bottom: 15px;
-        }
-        .debug-section h4 {
-            margin-top: 0;
-            margin-bottom: 5px;
-            color: #495057;
-        }
-        .debug-content {
-            background: #fff;
-            padding: 10px;
-            border: 1px solid #eee;
-            border-radius: 4px;
-            max-height: 300px;
-            overflow: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-size: 0.9em;
-        }
-        #showDebugButton {
-            margin-top: 10px;
-            background-color: #6c757d;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9em;
-        }
-        #showDebugButton:hover {
-            background-color: #5a6268;
-        }
-        #closeDebugButton {
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .output-count-container {
-            margin-bottom: 15px;
-            display: flex;
-            flex-direction: column;
-        }
-        .output-count-container label {
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        .output-count-container input[type="number"] {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            width: 100px; /* Adjust width as needed */
-            box-sizing: border-box;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
@@ -90,9 +23,39 @@
                 <select id="geminiModel"></select>
             </div>
 
-            <div class="output-count-container">
-                <label for="imageCountInput">Number of Images to Generate:</label>
-                <input type="number" id="imageCountInput" value="1" min="1" max="8">
+            <div class="options-row">
+                <div class="option-group output-count-container">
+                    <label for="imageCountInput">Image Count:</label>
+                    <input type="number" id="imageCountInput" value="1" min="1" max="8">
+                </div>
+
+                <div class="option-group">
+                    <label for="aspectRatioSelect">Aspect Ratio:</label>
+                    <select id="aspectRatioSelect">
+                        <option value="1:1">1:1 (Square)</option>
+                        <option value="16:9">16:9 (Landscape)</option>
+                        <option value="9:16">9:16 (Portrait)</option>
+                        <option value="4:3">4:3</option>
+                        <option value="3:4">3:4</option>
+                    </select>
+                </div>
+
+                <div class="option-group">
+                    <label for="imageSizeSelect">Image Size:</label>
+                    <select id="imageSizeSelect">
+                        <option value="1K">1K: Standard quality (default, usually 1024x1024 for square)</option>
+                        <option value="2K">2K: High definition (2048x2048 for square)</option>
+                        <option value="4K">4K: Professional grade (experimental/ultra quality)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="options-row">
+                 <div class="option-group checkbox-group">
+                    <label for="useGoogleSearch">
+                        <input type="checkbox" id="useGoogleSearch"> Use Google Search Tool
+                    </label>
+                </div>
             </div>
 
             <div class="prompt-container">
@@ -100,6 +63,7 @@
                 <textarea id="promptInput" rows="3" placeholder="Describe the image you want to generate... (e.g., A fluffy cat sitting on a vintage sofa)"></textarea>
                 <button id="generateImageButton">Generate Images</button>
                 <button id="showDebugButton" style="display:none;">Show Last API Request/Response</button>
+                <button id="sosReportButton" style="display:none;">Get SOS Report</button>
             </div>
         </div>
 

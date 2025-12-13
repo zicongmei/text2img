@@ -108,7 +108,7 @@ button {
     background-color: #007bff;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 44px;
     cursor: pointer;
     font-size: 1.1em;
     transition: background-color 0.2s;
@@ -168,6 +168,121 @@ button:disabled {
     padding: 10px;
 }
 
+/* Styles moved from HTML and new styles */
+
+.debug-container {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-family: monospace;
+    display: none;
+}
+
+.debug-section {
+    margin-bottom: 15px;
+}
+
+.debug-section h4 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    color: #495057;
+}
+
+.debug-content {
+    background: #fff;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    max-height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 0.9em;
+}
+
+#showDebugButton {
+    margin-top: 10px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+#showDebugButton:hover {
+    background-color: #5a6268;
+}
+
+#sosReportButton {
+    margin-top: 10px;
+    background-color: #fd7e14;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+#sosReportButton:hover {
+    background-color: #e08e0b;
+}
+
+#closeDebugButton {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.output-count-container label {
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.output-count-container input[type="number"] {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.options-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.option-group {
+    flex: 1;
+    min-width: 120px;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+}
+
+.checkbox-group label {
+    margin-bottom: 0;
+    cursor: pointer;
+    font-weight: normal;
+    display: flex;
+    align-items: center;
+}
+
+.checkbox-group input {
+    width: auto;
+    margin-right: 10px;
+}
+
 @media (max-width: 768px) {
     .container {
         padding: 20px;
@@ -184,6 +299,10 @@ button:disabled {
     }
     .api-key-container button {
         width: 100%;
+    }
+    .options-row {
+        flex-direction: column;
+        gap: 15px;
     }
 }
 
