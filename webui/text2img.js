@@ -1,7 +1,7 @@
 // text2img.js
 
 let currentApiKey = '';
-let selectedModel = 'gemini-2.5-flash-lite'; // Default model for prompt refinement
+let selectedModel = 'gemini-2.5-flash-image'; // Default model for image generation
 
 // Store last API interactions for debugging
 let lastApiInteraction = {
@@ -10,12 +10,12 @@ let lastApiInteraction = {
     response: null
 };
 
-// Model names and labels for prompt enhancement
-const GEMINI_TEXT_MODELS = {
-    'gemini-2.5-flash': 'Gemini 2.5 Flash (Text Model)',
-    'gemini-2.5-pro': 'Gemini 2.5 Pro (Text Model)',
-    'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite (Text Model)',
-    'gemini-3-pro-preview': 'Gemini 3 Pro Preview (Text Model)'
+// Model names and labels for image generation
+const GEMINI_IMAGE_MODELS = {
+    'gemini-2.5-flash-image': 'Gemini 2.5 Flash Image',
+    'gemini-2.5-pro-image': 'Gemini 2.5 Pro Image',
+    'gemini-2.5-flash-lite-image': 'Gemini 2.5 Flash Lite Image',
+    'gemini-3-pro-image-preview': 'Gemini 3 Pro Preview Image'
 };
 
 // Get DOM elements
@@ -83,15 +83,15 @@ function loadApiKeyFromLocalStorage() {
 // Function to populate model dropdown and load selected model
 function populateModelSelect() {
     geminiModelSelect.innerHTML = ''; 
-    for (const modelId in GEMINI_TEXT_MODELS) {
+    for (const modelId in GEMINI_IMAGE_MODELS) {
         const option = document.createElement('option');
         option.value = modelId;
-        option.textContent = GEMINI_TEXT_MODELS[modelId];
+        option.textContent = GEMINI_IMAGE_MODELS[modelId];
         geminiModelSelect.appendChild(option);
     }
 
     const storedModel = getLocalStorageItem('selectedModel');
-    if (storedModel && GEMINI_TEXT_MODELS[storedModel]) {
+    if (storedModel && GEMINI_IMAGE_MODELS[storedModel]) {
         selectedModel = storedModel;
         geminiModelSelect.value = storedModel;
     } else {
@@ -144,50 +144,16 @@ async function generateImage() {
     hideDebugModal(); // Hide previous debug info
 
     try {
-        let finalPrompt = prompt;
-
-        // --- STEP 1: Prompt Enhancement (Optional, using selected text model) ---
-        try {
-            statusMessage.textContent = 'Enhancing prompt with Gemini Text Model...';
-            const promptEnhancementEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
-            const promptEnhancementRequestBody = {
-                contents: [{
-                    role: 'user',
-                    parts: [{ text: `Elaborate on the following image generation prompt to make it more descriptive and suitable for a text-to-image model. Focus on details like style, lighting, setting, and specific elements. Provide only the enhanced prompt, no conversational text. Original prompt: "${prompt}"` }]
-                }],
-                generationConfig: { maxOutputTokens: 200 },
-            };
-
-            const promptResponse = await fetch(promptEnhancementEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': currentApiKey },
-                body: JSON.stringify(promptEnhancementRequestBody),
-            });
-
-            const promptData = await promptResponse.json();
-            
-            // Log debug info for this step (will be overwritten if next step runs, which is fine)
-            updateDebugInfo(promptEnhancementEndpoint, promptEnhancementRequestBody, promptData);
-
-            if (promptResponse.ok && promptData.candidates?.[0]?.content?.parts?.[0]?.text) {
-                finalPrompt = promptData.candidates[0].content.parts[0].text;
-                console.log('Enhanced Prompt:', finalPrompt);
-            }
-        } catch (promptError) {
-            console.warn('Error during prompt enhancement, proceeding with original:', promptError);
-        }
-
-        // --- STEP 2: Image Generation (Using gemini-2.5-flash-image) ---
+        // --- Image Generation (Using selected model) ---
         statusMessage.textContent = 'Generating image...';
         
-        // This specific model endpoint is used for image generation
-        const imageModel = "gemini-2.5-flash-image";
+        const imageModel = selectedModel;
         const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${imageModel}:generateContent`;
         
         const imageRequestBody = {
             contents: [{
                 parts: [
-                    { text: finalPrompt }
+                    { text: prompt }
                 ]
             }]
         };
@@ -211,8 +177,6 @@ async function generateImage() {
         }
 
         // Extract image data
-        // The curl example suggests searching for "data": "base64..."
-        // In the JSON structure, this is typically found in inlineData
         let base64Image = null;
 
         if (imageData.candidates && imageData.candidates[0] && imageData.candidates[0].content && imageData.candidates[0].content.parts) {
@@ -234,7 +198,7 @@ async function generateImage() {
             imgContainer.classList.add('image-item');
             const img = document.createElement('img');
             img.src = `data:image/png;base64,${base64Image}`;
-            img.alt = finalPrompt;
+            img.alt = prompt;
             imgContainer.appendChild(img);
             imageGallery.appendChild(imgContainer);
             statusMessage.textContent = 'Image generated successfully!';
@@ -276,9 +240,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     explanationNote.innerHTML = `
         <strong>Instructions:</strong>
-        Enter your Gemini API Key. Type a prompt and click "Generate". 
-        The tool uses a text model to enhance your prompt, then sends it to the 
-        <code>gemini-2.5-flash-image</code> model for generation.
+        Enter your Gemini API Key. Select an image generation model, type a prompt, and click "Generate". 
+        The tool sends your prompt directly to the selected model.
         <br><small>If you encounter issues, use the "Show Last API Request/Response" button to inspect the raw API data.</small>
     `;
 });
