@@ -261,36 +261,65 @@ function saveGeneratedImage(base64Image, prompt) {
 }
 
 // Debug functions
+function updateDebugButtonText() {
+    const count = allApiInteractions.length;
+    showApiCallsButton.textContent = `Show ${count} API Call${count !== 1 ? 's' : ''}`;
+}
+
+function appendApiCallEntry(interaction, index) {
+    const callDiv = document.createElement('div');
+    callDiv.classList.add('api-call-entry');
+    callDiv.innerHTML = `
+        <h4>API Call ${index + 1}</h4>
+        <div class="debug-section">
+            <h5>Endpoint</h5>
+            <div class="debug-content">${interaction.url}</div>
+        </div>
+        <div class="debug-section">
+            <h5>Request Body</h5>
+            <div class="debug-content">${JSON.stringify(interaction.request, null, 2)}</div>
+        </div>
+        <div class="debug-section">
+            <h5>Response Body</h5>
+            <div class="debug-content">${JSON.stringify(interaction.response, null, 2)}</div>
+        </div>
+    `;
+    apiCallsContainer.appendChild(callDiv);
+}
+
+function logApiInteraction(url, request, response) {
+    const interaction = { url, request, response };
+    allApiInteractions.push(interaction);
+    updateDebugButtonText();
+    
+    // If debug window is visible, append the new entry immediately
+    if (debugInfo.style.display !== 'none') {
+        // If it was showing "No API calls", clear that first
+        const noCallsMsg = apiCallsContainer.querySelector('p');
+        if (noCallsMsg && noCallsMsg.textContent.includes('No API calls')) {
+            apiCallsContainer.innerHTML = '';
+        }
+        
+        appendApiCallEntry(interaction, allApiInteractions.length - 1);
+        // Scroll to bottom
+        apiCallsContainer.scrollTop = apiCallsContainer.scrollHeight;
+    }
+}
+
 function showApiCallsModal() {
     apiCallsContainer.innerHTML = ''; // Clear previous content
 
     if (allApiInteractions.length === 0) {
-        apiCallsContainer.innerHTML = '<p>No API calls were made during the last generation attempt.</p>';
+        apiCallsContainer.innerHTML = '<p>No API calls recorded yet.</p>';
         debugInfo.style.display = 'block';
         return;
     }
 
     allApiInteractions.forEach((interaction, index) => {
-        const callDiv = document.createElement('div');
-        callDiv.classList.add('api-call-entry');
-        callDiv.innerHTML = `
-            <h4>API Call ${index + 1}</h4>
-            <div class="debug-section">
-                <h5>Endpoint</h5>
-                <div class="debug-content">${interaction.url}</div>
-            </div>
-            <div class="debug-section">
-                <h5>Request Body</h5>
-                <div class="debug-content">${JSON.stringify(interaction.request, null, 2)}</div>
-            </div>
-            <div class="debug-section">
-                <h5>Response Body</h5>
-                <div class="debug-content">${JSON.stringify(interaction.response, null, 2)}</div>
-            </div>
-        `;
-        apiCallsContainer.appendChild(callDiv);
+        appendApiCallEntry(interaction, index);
     });
     debugInfo.style.display = 'block';
+    apiCallsContainer.scrollTop = apiCallsContainer.scrollHeight;
 }
 
 function hideDebugModal() {
@@ -378,8 +407,9 @@ async function generateImage() {
     statusMessage.textContent = 'Starting process...';
     
     allApiInteractions = [];
-    showApiCallsButton.style.display = 'none';
-    debugInfo.style.display = 'none'; 
+    updateDebugButtonText();
+    showApiCallsButton.style.display = 'inline-block'; // Show debug button immediately
+    debugInfo.style.display = 'none'; // Ensure debug panel is closed initially
 
     abortController = new AbortController();
     generateImageButton.disabled = true;
@@ -415,10 +445,6 @@ async function generateImage() {
     } finally {
         generateImageButton.disabled = false;
         stopGenerationButton.style.display = 'none';
-        if (allApiInteractions.length > 0) {
-            showApiCallsButton.textContent = `Show ${allApiInteractions.length} API Call${allApiInteractions.length > 1 ? 's' : ''}`;
-            showApiCallsButton.style.display = 'inline-block';
-        }
         abortController = null;
     }
 }
@@ -464,7 +490,7 @@ async function generateSingleImage(prompt) {
     });
 
     const data = await response.json();
-    allApiInteractions.push({ url: imageEndpoint, request: requestBody, response: data });
+    logApiInteraction(imageEndpoint, requestBody, data);
 
     if (!response.ok) {
         throw new Error(data.error?.message || `API Error: ${response.statusText}`);
@@ -542,11 +568,7 @@ async function generateBatchImages(prompt, numToGenerate) {
     });
 
     const data = await response.json();
-    allApiInteractions.push({
-        url: batchEndpoint,
-        request: batchRequestBody,
-        response: data
-    });
+    logApiInteraction(batchEndpoint, batchRequestBody, data);
 
     if (!response.ok) {
         throw new Error(data.error?.message || `Batch creation failed: ${response.statusText}`);
@@ -556,36 +578,55 @@ async function generateBatchImages(prompt, numToGenerate) {
     statusMessage.textContent = `Batch job submitted. Waiting for results...`;
 
     // Polling Logic
-    let jobState = data.state;
+    const getBatchState = (d) => {
+        if (d.state) return d.state;
+        if (d.metadata && d.metadata.state) return d.metadata.state;
+        return undefined;
+    };
+
+    let jobState = getBatchState(data);
     let pollData = data;
     
-    while (jobState !== 'JOB_STATE_SUCCEEDED' && jobState !== 'JOB_STATE_FAILED' && jobState !== 'JOB_STATE_CANCELLED') {
+    // Loop until terminal state. Note: API uses BATCH_STATE prefixes.
+    while (jobState !== 'BATCH_STATE_SUCCEEDED' && jobState !== 'BATCH_STATE_FAILED' && jobState !== 'BATCH_STATE_CANCELLED') {
         if (abortController.signal.aborted) {
             throw new Error('Generation cancelled by user.');
         }
         
         await new Promise(resolve => setTimeout(resolve, 3000)); // Poll every 3 seconds
         
-        const pollResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/${batchName}`, {
+        const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${batchName}`;
+        const pollResponse = await fetch(pollUrl, {
             headers: { 'X-Goog-Api-Key': currentApiKey },
             signal: abortController.signal
         });
         
         pollData = await pollResponse.json();
-        jobState = pollData.state;
-        statusMessage.textContent = `Batch Processing... State: ${jobState}`;
+        
+        // Log every polling query
+        logApiInteraction(pollUrl, { method: 'GET (Poll Status)' }, pollData);
+        
+        jobState = getBatchState(pollData);
+        
+        // If state is undefined but 'response' exists, it means job succeeded and result is ready
+        if (!jobState && pollData.response) {
+            jobState = 'BATCH_STATE_SUCCEEDED';
+        }
+        
+        statusMessage.textContent = `Batch Processing... State: ${jobState || 'Unknown'}`;
     }
 
-    // Capture final poll state for debug
-    allApiInteractions.push({
-        url: `https://generativelanguage.googleapis.com/v1beta/${batchName}`,
-        request: { method: 'GET (Final Poll)' },
-        response: pollData
-    });
-
-    if (jobState === 'JOB_STATE_SUCCEEDED') {
-        // Extract results from dest.inlinedResponses
-        const results = pollData.dest?.inlinedResponses;
+    if (jobState === 'BATCH_STATE_SUCCEEDED') {
+        // Extract results
+        // Handle nested structure found in responses
+        let results = null;
+        if (pollData.response && pollData.response.inlinedResponses && pollData.response.inlinedResponses.inlinedResponses) {
+            // Nested array as per user trace
+            results = pollData.response.inlinedResponses.inlinedResponses;
+        } else if (pollData.dest && pollData.dest.inlinedResponses) {
+            // Fallback for previous structure
+            results = pollData.dest.inlinedResponses;
+        }
         
         if (!results || !Array.isArray(results)) {
             throw new Error('Job succeeded but result format is unexpected (no inlinedResponses).');
@@ -632,10 +673,6 @@ function stopGeneration() {
         statusMessage.textContent = 'Image generation cancelled by user.';
         generateImageButton.disabled = false;
         stopGenerationButton.style.display = 'none';
-        if (allApiInteractions.length > 0) {
-            showApiCallsButton.textContent = `Show ${allApiInteractions.length} API Call${allApiInteractions.length > 1 ? 's' : ''}`;
-            showApiCallsButton.style.display = 'inline-block';
-        }
         abortController = null; // Reset abortController
     }
 }
