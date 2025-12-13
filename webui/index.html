@@ -55,6 +55,22 @@
             border-radius: 4px;
             cursor: pointer;
         }
+        .output-count-container {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        .output-count-container label {
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .output-count-container input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100px; /* Adjust width as needed */
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
@@ -72,6 +88,11 @@
             <div class="model-select-container">
                 <label for="geminiModel">Select Image Generation Model:</label>
                 <select id="geminiModel"></select>
+            </div>
+
+            <div class="output-count-container">
+                <label for="imageCountInput">Number of Images to Generate:</label>
+                <input type="number" id="imageCountInput" value="1" min="1" max="8">
             </div>
 
             <div class="prompt-container">
