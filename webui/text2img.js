@@ -267,24 +267,39 @@ function updateDebugButtonText() {
 }
 
 function appendApiCallEntry(interaction, index) {
-    const callDiv = document.createElement('div');
-    callDiv.classList.add('api-call-entry');
-    callDiv.innerHTML = `
-        <h4>API Call ${index + 1}</h4>
-        <div class="debug-section">
-            <h5>Endpoint</h5>
-            <div class="debug-content">${interaction.url}</div>
-        </div>
-        <div class="debug-section">
-            <h5>Request Body</h5>
-            <div class="debug-content">${JSON.stringify(interaction.request, null, 2)}</div>
-        </div>
-        <div class="debug-section">
-            <h5>Response Body</h5>
-            <div class="debug-content">${JSON.stringify(interaction.response, null, 2)}</div>
-        </div>
+    const callDetails = document.createElement('details');
+    callDetails.classList.add('api-call-entry');
+
+    const summary = document.createElement('summary');
+    const endpointName = interaction.url.split('/').pop().split('?')[0]; // Extract endpoint name
+    summary.innerHTML = `<h4>API Call ${index + 1}: ${endpointName}</h4>`;
+    callDetails.appendChild(summary);
+
+    const endpointDiv = document.createElement('div');
+    endpointDiv.classList.add('debug-section');
+    endpointDiv.innerHTML = `
+        <h5>Endpoint</h5>
+        <div class="debug-content">${interaction.url}</div>
     `;
-    apiCallsContainer.appendChild(callDiv);
+    callDetails.appendChild(endpointDiv);
+
+    const requestDiv = document.createElement('div');
+    requestDiv.classList.add('debug-section');
+    requestDiv.innerHTML = `
+        <h5>Request Body</h5>
+        <div class="debug-content">${JSON.stringify(interaction.request, null, 2)}</div>
+    `;
+    callDetails.appendChild(requestDiv);
+
+    const responseDiv = document.createElement('div');
+    responseDiv.classList.add('debug-section');
+    responseDiv.innerHTML = `
+        <h5>Response Body</h5>
+        <div class="debug-content">${JSON.stringify(interaction.response, null, 2)}</div>
+    `;
+    callDetails.appendChild(responseDiv);
+
+    apiCallsContainer.appendChild(callDetails);
 }
 
 function logApiInteraction(url, request, response) {

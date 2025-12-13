@@ -324,21 +324,66 @@ button:disabled {
     margin-bottom: 15px;
 }
 
-.api-call-entry {
+.api-call-entry { /* This will be the <details> tag */
     background-color: #fff;
     border: 1px solid #eee;
     border-radius: 4px;
-    padding: 10px;
     margin-bottom: 15px;
+    padding: 0; /* Remove padding from details itself, apply to summary and inner sections */
 }
 
-.api-call-entry h4 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    color: #007bff;
+.api-call-entry summary {
+    display: block; /* Make summary behave like a block element */
+    cursor: pointer;
+    padding: 10px; /* Padding for the clickable header */
+    background-color: #e9ecef; /* Slightly different background for summary */
     border-bottom: 1px solid #eee;
-    padding-bottom: 5px;
+    border-radius: 4px 4px 0 0; /* Rounded top corners */
+    margin-bottom: 0; /* Remove default margin */
+    color: #007bff;
+    font-weight: bold;
+    outline: none; /* Remove focus outline */
 }
+
+.api-call-entry summary::-webkit-details-marker {
+    display: none; /* Hide default arrow marker */
+}
+
+.api-call-entry summary::before {
+    content: '▶'; /* Custom arrow for collapsed state */
+    display: inline-block;
+    width: 1em;
+    margin-right: 0.5em;
+    transition: transform 0.2s;
+}
+
+.api-call-entry[open] summary::before {
+    content: '▼'; /* Custom arrow for open state */
+    transform: rotate(0deg); /* No rotation needed if content is '▼' */
+}
+
+/* Ensure h4 inside summary doesn't interfere with summary padding */
+.api-call-entry summary h4 {
+    display: inline; /* Keep h4 inline with arrow */
+    margin: 0;
+    color: #007bff; /* Keep blue color */
+    border-bottom: none; /* No border for h4 inside summary */
+    padding-bottom: 0;
+}
+
+/* Adjust padding for debug sections *inside* the details element */
+.api-call-entry .debug-section {
+    padding: 10px; /* Add padding to content sections */
+    border-top: 1px solid #eee; /* Separate sections visually */
+}
+.api-call-entry .debug-section:first-of-type {
+    border-top: none; /* No top border for the first section after summary */
+}
+.api-call-entry[open] .debug-section:last-of-type {
+    border-bottom: none; /* No bottom border for the last section when open */
+    border-radius: 0 0 4px 4px;
+}
+
 
 .debug-section {
     margin-bottom: 10px;
