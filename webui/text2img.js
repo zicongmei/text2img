@@ -5,12 +5,8 @@ let selectedModel = 'gemini-2.5-flash-image'; // Default model for image generat
 let numOutputImages = 1; // Default number of images to generate
 let selectedInputImageBase64 = null; // Store selected image for input
 
-// Store last API interactions for debugging
-let lastApiInteraction = {
-    url: '',
-    request: null,
-    response: null
-};
+let abortController = null; // To manage ongoing fetch requests
+let allApiInteractions = []; // To store all API calls for debug info
 
 // Model names and labels for image generation
 const GEMINI_IMAGE_MODELS = {
@@ -28,6 +24,7 @@ const geminiModelSelect = document.getElementById('geminiModel');
 const imageCountInput = document.getElementById('imageCountInput');
 const promptInput = document.getElementById('promptInput');
 const generateImageButton = document.getElementById('generateImageButton');
+const stopGenerationButton = document.getElementById('stopGenerationButton'); // New stop button
 const imageGallery = document.getElementById('imageGallery');
 const statusMessage = document.getElementById('statusMessage');
 const explanationNote = document.getElementById('explanationNote');
@@ -48,12 +45,10 @@ const clearSelectedImageButton = document.getElementById('clearSelectedImageButt
 const loadImageButton = document.getElementById('loadImageButton');
 const imageFileInput = document.getElementById('imageFileInput');
 
-// Debug Elements
-const showDebugButton = document.getElementById('showDebugButton');
+// Debug Elements (modified to show all API calls)
+const showApiCallsButton = document.getElementById('showApiCallsButton'); // Renamed debug button
 const debugInfo = document.getElementById('debugInfo');
-const debugUrl = document.getElementById('debugUrl');
-const debugRequest = document.getElementById('debugRequest');
-const debugResponse = document.getElementById('debugResponse');
+const apiCallsContainer = document.getElementById('apiCallsContainer'); // New container for multiple calls
 const closeDebugButton = document.getElementById('closeDebugButton');
 
 // Utility functions for localStorage
@@ -116,9 +111,19 @@ function loadSettingsFromLocalStorage() {
         aspectRatioSelect.value = storedAspectRatio;
     }
 
-    // Model-dependent features (Image Size, Google Search) are handled by toggleModelDependentFeatures
-    // We explicitly avoid setting them here to ensure toggleModelDependentFeatures applies the correct state
-    // based on the *currently selected model*. The raw stored values are handled within toggleModelDependentFeatures.
+    // Load Prompt
+    const storedPrompt = getLocalStorageItem('promptInput');
+    if (storedPrompt) {
+        promptInput.value = storedPrompt;
+    }
+
+    // Load Selected Input Image
+    const storedInputImageBase64 = getLocalStorageItem('selectedInputImageBase64');
+    if (storedInputImageBase64) {
+        selectedInputImageBase64 = storedInputImageBase64;
+        selectedInputImage.src = `data:image/png;base64,${storedInputImageBase64}`;
+        selectedImageContainer.style.display = 'flex';
+    }
 }
 
 // Function to populate model dropdown and load selected model
@@ -225,6 +230,9 @@ function selectImageAsInput(base64) {
     selectedImageContainer.style.display = 'flex';
     statusMessage.textContent = 'Image selected as input for next generation.';
     
+    // Save to localStorage
+    setLocalStorageItem('selectedInputImageBase64', base64);
+
     // Scroll up to show the selection
     selectedImageContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -233,6 +241,9 @@ function clearSelectedInputImage() {
     selectedInputImageBase64 = null;
     selectedInputImage.src = '';
     selectedImageContainer.style.display = 'none';
+    
+    // Remove from localStorage
+    localStorage.removeItem('selectedInputImageBase64');
 }
 
 // Function to save a generated image
@@ -250,17 +261,35 @@ function saveGeneratedImage(base64Image, prompt) {
 }
 
 // Debug functions
-function updateDebugInfo(url, request, response) {
-    lastApiInteraction.url = url;
-    lastApiInteraction.request = request;
-    lastApiInteraction.response = response;
-    showDebugButton.style.display = 'inline-block';
-}
+function showApiCallsModal() {
+    apiCallsContainer.innerHTML = ''; // Clear previous content
 
-function showDebugModal() {
-    debugUrl.textContent = lastApiInteraction.url;
-    debugRequest.textContent = JSON.stringify(lastApiInteraction.request, null, 2);
-    debugResponse.textContent = JSON.stringify(lastApiInteraction.response, null, 2);
+    if (allApiInteractions.length === 0) {
+        apiCallsContainer.innerHTML = '<p>No API calls were made during the last generation attempt.</p>';
+        debugInfo.style.display = 'block';
+        return;
+    }
+
+    allApiInteractions.forEach((interaction, index) => {
+        const callDiv = document.createElement('div');
+        callDiv.classList.add('api-call-entry');
+        callDiv.innerHTML = `
+            <h4>API Call ${index + 1}</h4>
+            <div class="debug-section">
+                <h5>Endpoint</h5>
+                <div class="debug-content">${interaction.url}</div>
+            </div>
+            <div class="debug-section">
+                <h5>Request Body</h5>
+                <div class="debug-content">${JSON.stringify(interaction.request, null, 2)}</div>
+            </div>
+            <div class="debug-section">
+                <h5>Response Body</h5>
+                <div class="debug-content">${JSON.stringify(interaction.response, null, 2)}</div>
+            </div>
+        `;
+        apiCallsContainer.appendChild(callDiv);
+    });
     debugInfo.style.display = 'block';
 }
 
@@ -298,14 +327,22 @@ async function generateImage() {
 
     imageGallery.innerHTML = ''; 
     statusMessage.textContent = 'Starting process...';
-    generateImageButton.disabled = true;
-    hideDebugModal(); // Hide previous debug info
+    
+    // Reset debug info at the start of a new generation batch
+    allApiInteractions = [];
+    showApiCallsButton.style.display = 'none';
+    debugInfo.style.display = 'none'; // Ensure debug panel is hidden initially
 
-    // Get the number of images to generate from the input field
+    // Set up AbortController for stopping the generation
+    abortController = new AbortController();
+    generateImageButton.disabled = true;
+    stopGenerationButton.style.display = 'inline-block';
+
     const numToGenerate = parseInt(imageCountInput.value, 10);
     if (isNaN(numToGenerate) || numToGenerate < 1) {
         statusMessage.textContent = 'Please enter a valid number of images (1 or more).';
         generateImageButton.disabled = false;
+        stopGenerationButton.style.display = 'none';
         return;
     }
 
@@ -317,6 +354,10 @@ async function generateImage() {
         const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${imageModel}:generateContent`;
         
         for (let i = 0; i < numToGenerate; i++) {
+            if (abortController.signal.aborted) {
+                statusMessage.textContent = 'Image generation cancelled.';
+                break; // Exit loop if aborted
+            }
             statusMessage.textContent = `Generating image ${i + 1} of ${numToGenerate}...`;
 
             // Construct parts array
@@ -341,8 +382,6 @@ async function generateImage() {
             if (!imageSizeSelect.disabled) {
                 generationConfig.imageConfig.imageSize = imageSizeSelect.value;
             }
-            // For Gemini 2.5 models, imageSize is not supported, so it's omitted when disabled.
-            // The default 1K size is applied by the backend if not specified for 2.5 models.
 
             const imageRequestBody = {
                 contents: [{
@@ -366,13 +405,18 @@ async function generateImage() {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': currentApiKey
                     },
-                    body: JSON.stringify(imageRequestBody)
+                    body: JSON.stringify(imageRequestBody),
+                    signal: abortController.signal // Pass the abort signal
                 });
 
                 imageData = await imageResponse.json();
                 
-                // Update debug info with the LAST generation request/response of the batch
-                updateDebugInfo(imageEndpoint, imageRequestBody, imageData);
+                // Store this API interaction for debugging
+                allApiInteractions.push({
+                    url: imageEndpoint,
+                    request: imageRequestBody,
+                    response: imageData
+                });
 
                 if (!imageResponse.ok) {
                     throw new Error(imageData.error?.message || `API Error: ${imageResponse.statusText}`);
@@ -427,6 +471,14 @@ async function generateImage() {
                     throw new Error('No valid image data found in the API response.');
                 }
             } catch (innerError) {
+                if (innerError.name === 'AbortError') {
+                    statusMessage.textContent = `Image generation ${i + 1} cancelled.`;
+                    const cancelledDiv = document.createElement('div');
+                    cancelledDiv.classList.add('image-error');
+                    cancelledDiv.textContent = `Image ${i + 1} Cancelled.`;
+                    imageGallery.appendChild(cancelledDiv);
+                    break; // Stop further generations if aborted
+                }
                 console.error(`Error generating image ${i + 1}:`, innerError);
                 lastError = innerError; // Store the last error encountered
                 const errorDiv = document.createElement('div');
@@ -436,7 +488,9 @@ async function generateImage() {
             }
         }
 
-        if (successfulGenerations === numToGenerate) {
+        if (abortController.signal.aborted) {
+             statusMessage.textContent = `Generation stopped by user. ${successfulGenerations} image(s) completed.`;
+        } else if (successfulGenerations === numToGenerate) {
             statusMessage.textContent = `${successfulGenerations} image(s) generated successfully!`;
         } else if (successfulGenerations > 0) {
             statusMessage.textContent = `Generated ${successfulGenerations} of ${numToGenerate} images. Some failed.`;
@@ -453,9 +507,30 @@ async function generateImage() {
         imageGallery.appendChild(errorDiv);
     } finally {
         generateImageButton.disabled = false;
-        // Don't clear status immediately so user sees result
+        stopGenerationButton.style.display = 'none';
+        if (allApiInteractions.length > 0) {
+            showApiCallsButton.textContent = `Show ${allApiInteractions.length} API Call${allApiInteractions.length > 1 ? 's' : ''}`;
+            showApiCallsButton.style.display = 'inline-block';
+        }
+        abortController = null; // Reset abortController
     }
 }
+
+// Function to stop image generation
+function stopGeneration() {
+    if (abortController) {
+        abortController.abort();
+        statusMessage.textContent = 'Image generation cancelled by user.';
+        generateImageButton.disabled = false;
+        stopGenerationButton.style.display = 'none';
+        if (allApiInteractions.length > 0) {
+            showApiCallsButton.textContent = `Show ${allApiInteractions.length} API Call${allApiInteractions.length > 1 ? 's' : ''}`;
+            showApiCallsButton.style.display = 'inline-block';
+        }
+        abortController = null; // Reset abortController
+    }
+}
+
 
 // Event Listeners
 setApiKeyButton.addEventListener('click', setApiKey);
@@ -466,6 +541,10 @@ aspectRatioSelect.addEventListener('change', updateAspectRatio);
 imageSizeSelect.addEventListener('change', updateImageSize);
 useGoogleSearchInput.addEventListener('change', updateUseGoogleSearch);
 clearSelectedImageButton.addEventListener('click', clearSelectedInputImage);
+promptInput.addEventListener('input', () => {
+    setLocalStorageItem('promptInput', promptInput.value);
+});
+
 
 // Event listener for Load Image button
 loadImageButton.addEventListener('click', () => {
@@ -498,13 +577,14 @@ imageFileInput.addEventListener('change', (event) => {
 
 
 generateImageButton.addEventListener('click', generateImage);
+stopGenerationButton.addEventListener('click', stopGeneration); // New event listener for stop button
 promptInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault(); 
         generateImage();
     }
 });
-showDebugButton.addEventListener('click', showDebugModal);
+showApiCallsButton.addEventListener('click', showApiCallsModal); // Use renamed button and modal function
 closeDebugButton.addEventListener('click', hideDebugModal);
 
 // Initial setup on page load

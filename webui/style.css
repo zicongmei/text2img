@@ -102,19 +102,39 @@ textarea {
     background-color: #218838;
 }
 
+.generation-buttons {
+    display: flex;
+    gap: 10px; /* Space between Generate and Stop buttons */
+    margin-top: 10px;
+}
+
+.generation-buttons button {
+    flex: 1; /* Make both buttons take equal space */
+    width: auto; /* Override global button width */
+}
 
 button {
     padding: 10px 20px;
     background-color: #007bff;
     color: white;
     border: none;
-    border-radius: 44px;
+    border-radius: 4px; /* Changed from 44px to 4px for consistency */
     cursor: pointer;
     font-size: 1.1em;
     transition: background-color 0.2s;
-    width: 100%; /* Make generate button full width */
+    width: 100%; /* Make generate button full width (unless in .generation-buttons) */
     margin-top: 10px;
 }
+
+#stopGenerationButton {
+    background-color: #ffc107; /* Warning yellow for stop */
+    color: #333;
+}
+
+#stopGenerationButton:hover:not(:disabled) {
+    background-color: #e0a800;
+}
+
 
 button:hover:not(:disabled) {
     background-color: #0056b3;
@@ -298,29 +318,52 @@ button:disabled {
     display: none;
 }
 
-.debug-section {
+#apiCallsContainer {
+    max-height: 500px; /* Limit height and make it scrollable */
+    overflow-y: auto;
     margin-bottom: 15px;
 }
 
-.debug-section h4 {
+.api-call-entry {
+    background-color: #fff;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+.api-call-entry h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #007bff;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+
+.debug-section {
+    margin-bottom: 10px;
+}
+
+.debug-section h5 {
     margin-top: 0;
     margin-bottom: 5px;
     color: #495057;
+    font-size: 1em;
 }
 
 .debug-content {
-    background: #fff;
-    padding: 10px;
-    border: 1px solid #eee;
+    background: #fdfdfd;
+    padding: 8px;
+    border: 1px solid #e9ecef;
     border-radius: 4px;
-    max-height: 300px;
+    max-height: 150px; /* Limit height for individual request/response */
     overflow: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
     font-size: 0.9em;
 }
 
-#showDebugButton {
+#showApiCallsButton {
     margin-top: 10px;
     background-color: #6c757d;
     color: white;
@@ -331,7 +374,7 @@ button:disabled {
     font-size: 0.9em;
 }
 
-#showDebugButton:hover {
+#showApiCallsButton:hover {
     background-color: #5a6268;
 }
 
@@ -421,6 +464,9 @@ button:disabled {
     }
     .image-action-buttons button {
         width: 100%; /* Make load button full width on small screens */
+    }
+    .generation-buttons {
+        flex-direction: column;
     }
 }
 
