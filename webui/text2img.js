@@ -3,7 +3,7 @@
 let currentApiKey = '';
 let selectedModel = 'gemini-2.5-flash-image'; // Default model for image generation
 let numOutputImages = 1; // Default number of images to generate
-let selectedInputImageBase64 = null; // Store selected image for input
+let selectedInputImages = []; // Store selected images for input (Array of base64 strings)
 
 let abortController = null; // To manage ongoing fetch requests
 let allApiInteractions = []; // To store all API calls for debug info
@@ -87,8 +87,8 @@ const googleSearchOptionGroup = document.getElementById('googleSearchOptionGroup
 
 // Selected Image Elements
 const selectedImageContainer = document.getElementById('selectedImageContainer');
-const selectedInputImage = document.getElementById('selectedInputImage');
-const clearSelectedImageButton = document.getElementById('clearSelectedImageButton');
+const selectedImagesList = document.getElementById('selectedImagesList');
+const clearAllImagesButton = document.getElementById('clearAllImagesButton');
 
 // New elements for Load Image
 const loadImageButton = document.getElementById('loadImageButton');
@@ -174,13 +174,25 @@ function loadSettingsFromLocalStorage() {
         promptInput.value = storedPrompt;
     }
 
-    // Load Selected Input Image
-    const storedInputImageBase64 = getLocalStorageItem('selectedInputImageBase64');
-    if (storedInputImageBase64) {
-        selectedInputImageBase64 = storedInputImageBase64;
-        selectedInputImage.src = `data:image/png;base64,${storedInputImageBase64}`;
-        selectedImageContainer.style.display = 'flex';
+    // Load Selected Input Images
+    const storedInputImages = getLocalStorageItem('selectedInputImages');
+    if (storedInputImages) {
+        try {
+            selectedInputImages = JSON.parse(storedInputImages);
+        } catch (e) {
+            console.error("Failed to parse stored images:", e);
+            selectedInputImages = [];
+        }
+    } else {
+        // Fallback for backward compatibility with single image
+        const oldSingleImage = getLocalStorageItem('selectedInputImageBase64');
+        if (oldSingleImage) {
+            selectedInputImages = [oldSingleImage];
+            // Remove old key
+            localStorage.removeItem('selectedInputImageBase64');
+        }
     }
+    renderSelectedImages();
 }
 
 // Function to populate model dropdown and load selected model
@@ -281,26 +293,56 @@ function updateUseGoogleSearch() {
 }
 
 // Input Image Selection Functions
-function selectImageAsInput(base64) {
-    selectedInputImageBase64 = base64;
-    selectedInputImage.src = `data:image/png;base64,${base64}`;
-    selectedImageContainer.style.display = 'flex';
-    statusMessage.textContent = 'Image selected as input for next generation.';
+function renderSelectedImages() {
+    selectedImagesList.innerHTML = '';
     
-    // Save to localStorage
-    setLocalStorageItem('selectedInputImageBase64', base64);
+    if (selectedInputImages.length === 0) {
+        selectedImageContainer.style.display = 'none';
+        return;
+    }
 
-    // Scroll up to show the selection
+    selectedImageContainer.style.display = 'block';
+
+    selectedInputImages.forEach((base64, index) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'selected-image-wrapper';
+        
+        const img = document.createElement('img');
+        img.src = `data:image/png;base64,${base64}`;
+        img.alt = `Selected Input ${index + 1}`;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'clear-image-btn';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove this image';
+        removeBtn.onclick = () => removeImageAtIndex(index);
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(removeBtn);
+        selectedImagesList.appendChild(wrapper);
+    });
+
+    // Update localStorage whenever render is called
+    setLocalStorageItem('selectedInputImages', JSON.stringify(selectedInputImages));
+}
+
+function addImageAsInput(base64) {
+    selectedInputImages.push(base64);
+    renderSelectedImages();
+    statusMessage.textContent = 'Image added as input.';
+    
+    // Scroll up to show the selection if it was hidden
     selectedImageContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function clearSelectedInputImage() {
-    selectedInputImageBase64 = null;
-    selectedInputImage.src = '';
-    selectedImageContainer.style.display = 'none';
-    
-    // Remove from localStorage
-    localStorage.removeItem('selectedInputImageBase64');
+function removeImageAtIndex(index) {
+    selectedInputImages.splice(index, 1);
+    renderSelectedImages();
+}
+
+function clearAllInputImages() {
+    selectedInputImages = [];
+    renderSelectedImages();
 }
 
 // Function to save a generated image
@@ -318,7 +360,7 @@ function saveGeneratedImage(base64Image, prompt) {
 }
 
 // Token and Price Calculation Logic
-function calculateCost(modelId, inputTextTokens, inputImagePresent, outputImageCount, imageOutputSize) {
+function calculateCost(modelId, inputTextTokens, inputImageCount, outputImageCount, imageOutputSize) {
     let inputCost = 0;
     let outputCost = 0;
     let totalInputTokensCalculated = inputTextTokens; // Actual tokens contributing to input cost
@@ -335,17 +377,17 @@ function calculateCost(modelId, inputTextTokens, inputImagePresent, outputImageC
     // --- Input Cost Calculation ---
     if (modelId === 'gemini-3-pro-image-preview') {
         inputCost += (inputTextTokens / TOKENS_PER_MILLION) * modelPricing.input.text_per_m_tokens;
-        if (inputImagePresent) {
-            inputCost += modelPricing.input.image_fixed_price;
+        if (inputImageCount > 0) {
+            inputCost += inputImageCount * modelPricing.input.image_fixed_price;
         }
     } else if (modelId === 'gemini-2.5-flash-image') {
-        if (inputImagePresent) {
-            totalInputTokensCalculated += TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
+        if (inputImageCount > 0) {
+            totalInputTokensCalculated += inputImageCount * TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
         }
         inputCost += (totalInputTokensCalculated / TOKENS_PER_MILLION) * modelPricing.input.text_and_image_per_m_tokens;
     } else if (modelId === 'gemini-2.5-pro-image') {
-        if (inputImagePresent) {
-            totalInputTokensCalculated += TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
+        if (inputImageCount > 0) {
+            totalInputTokensCalculated += inputImageCount * TOKEN_EQUIVALENTS.IMAGE_DEFAULT_1K_TOKENS;
         }
         // Assuming small prompt for pricing tier (<= 200k tokens)
         const inputPricePerM = modelPricing.input.text_and_image_per_m_tokens_small_prompt;
@@ -546,7 +588,7 @@ function processAndDisplayImage(imageData, prompt) {
         const useInputBtn = document.createElement('button');
         useInputBtn.textContent = 'Use as Input';
         useInputBtn.classList.add('use-input-btn');
-        useInputBtn.onclick = () => selectImageAsInput(base64Image);
+        useInputBtn.onclick = () => addImageAsInput(base64Image); // Changed to addImageAsInput
         buttonGroup.appendChild(useInputBtn);
 
         const saveImageBtn = document.createElement('button');
@@ -632,10 +674,13 @@ async function generateSingleImage(prompt) {
     statusMessage.textContent = 'Generating image...';
 
     const parts = [{ text: prompt }];
-    const inputImagePresent = !!selectedInputImageBase64;
-    if (inputImagePresent) {
-        parts.push({
-            inline_data: { mime_type: "image/png", data: selectedInputImageBase64 }
+    const inputImageCount = selectedInputImages.length;
+    
+    if (inputImageCount > 0) {
+        selectedInputImages.forEach(base64 => {
+            parts.push({
+                inline_data: { mime_type: "image/png", data: base64 }
+            });
         });
     }
 
@@ -663,7 +708,7 @@ async function generateSingleImage(prompt) {
     const inputTextTokens = Math.ceil(prompt.length / 4); // Estimate based on char count
 
     // Calculate cost for this API call (1 output image expected)
-    const costResult = calculateCost(selectedModel, inputTextTokens, inputImagePresent, 1, imageOutputSize);
+    const costResult = calculateCost(selectedModel, inputTextTokens, inputImageCount, 1, imageOutputSize);
 
     const response = await fetch(imageEndpoint, {
         method: 'POST',
@@ -699,7 +744,7 @@ async function generateSingleImage(prompt) {
     }
 
     // Recalculate cost based on actual successful outputs (Cost calculation logic remains based on image count for G3P as per pricing table)
-    const finalCostResult = calculateCost(selectedModel, actualInputTokens, inputImagePresent, successfulOutputImages, imageOutputSize);
+    const finalCostResult = calculateCost(selectedModel, actualInputTokens, inputImageCount, successfulOutputImages, imageOutputSize);
 
     logApiInteraction(imageEndpoint, requestBody, data, duration, actualInputTokens, actualOutputTokens, actualThoughtTokens, finalCostResult);
 
@@ -718,17 +763,16 @@ async function generateBatchImages(prompt, numToGenerate) {
     statusMessage.textContent = `Preparing batch job for ${numToGenerate} images...`;
     
     const requests = [];
-    const inputImagePresentForAllRequests = !!selectedInputImageBase64;
+    const inputImageCount = selectedInputImages.length;
     const imageOutputSizeForBatch = imageSizeSelect.value;
 
     for (let i = 0; i < numToGenerate; i++) {
         const parts = [{ text: prompt }];
-        if (inputImagePresentForAllRequests) {
-            parts.push({
-                inline_data: {
-                    mime_type: "image/png",
-                    data: selectedInputImageBase64
-                }
+        if (inputImageCount > 0) {
+            selectedInputImages.forEach(base64 => {
+                parts.push({
+                    inline_data: { mime_type: "image/png", data: base64 }
+                });
             });
         }
 
@@ -778,7 +822,7 @@ async function generateBatchImages(prompt, numToGenerate) {
     const batchSubmissionCostResult = calculateCost(
         selectedModel,
         totalInputTextTokens,
-        inputImagePresentForAllRequests,
+        inputImageCount,
         0, // No output images in submission response
         imageOutputSizeForBatch
     );
@@ -924,7 +968,7 @@ async function generateBatchImages(prompt, numToGenerate) {
         const outputImageCostResult = calculateCost(
             selectedModel,
             0, // Input tokens for this "output-only" calculation are 0
-            false, // No input image present for this output-only calculation
+            0, // No input image present for this output-only calculation
             successCount, // Only count successfully generated images for output cost
             imageOutputSizeForBatch
         );
@@ -995,7 +1039,7 @@ imageCountInput.addEventListener('input', updateNumOutputImages);
 aspectRatioSelect.addEventListener('change', updateAspectRatio);
 imageSizeSelect.addEventListener('change', updateImageSize);
 useGoogleSearchInput.addEventListener('change', updateUseGoogleSearch);
-clearSelectedImageButton.addEventListener('click', clearSelectedInputImage);
+clearAllImagesButton.addEventListener('click', clearAllInputImages);
 promptInput.addEventListener('input', () => {
     setLocalStorageItem('promptInput', promptInput.value);
 });
@@ -1006,12 +1050,14 @@ loadImageButton.addEventListener('click', () => {
     imageFileInput.click(); // Trigger the hidden file input click
 });
 
-// Event listener for hidden file input change
+// Event listener for hidden file input change (supports multiple files)
 imageFileInput.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (file) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    files.forEach(file => {
         if (!file.type.startsWith('image/')) {
-            statusMessage.textContent = 'Please select an image file.';
+            statusMessage.textContent = `Skipped non-image file: ${file.name}`;
             return;
         }
 
@@ -1019,15 +1065,17 @@ imageFileInput.addEventListener('change', (event) => {
         reader.onloadend = () => {
             const dataUrl = reader.result;
             const base64 = dataUrl.split(',')[1]; // Extract the base64 part
-            selectImageAsInput(base64);
-            imageFileInput.value = ''; // Clear the input so same file can be loaded again
+            addImageAsInput(base64);
         };
         reader.onerror = (error) => {
-            statusMessage.textContent = `Error loading image: ${error}`;
-            console.error('Error loading image:', error);
+            statusMessage.textContent = `Error loading image ${file.name}: ${error}`;
+            console.error(`Error loading image ${file.name}:`, error);
         };
         reader.readAsDataURL(file);
-    }
+    });
+    
+    // Clear the input so same files can be loaded again if needed (though UI allows duplicate additions)
+    imageFileInput.value = '';
 });
 
 

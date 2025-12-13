@@ -59,10 +59,12 @@
             </div>
 
             <div id="selectedImageContainer" class="selected-image-container" style="display: none;">
-                <label>Input Image:</label>
-                <div class="selected-image-wrapper">
-                    <img id="selectedInputImage" src="" alt="Selected Input">
-                    <button id="clearSelectedImageButton" class="clear-image-btn" title="Remove image">×</button>
+                <div class="selected-images-header">
+                    <label>Input Images:</label>
+                    <button id="clearAllImagesButton" class="clear-all-btn">Clear All</button>
+                </div>
+                <div id="selectedImagesList" class="selected-images-list">
+                    <!-- Selected images will be appended here -->
                 </div>
             </div>
 
@@ -111,8 +113,8 @@
 
 
             <div class="image-action-buttons">
-                <button id="loadImageButton">Load Image as Input</button>
-                <input type="file" id="imageFileInput" accept="image/png, image/jpeg, image/webp" style="display: none;">
+                <button id="loadImageButton">Load Image(s) as Input</button>
+                <input type="file" id="imageFileInput" accept="image/png, image/jpeg, image/webp" multiple style="display: none;">
             </div>
             
     </div>
